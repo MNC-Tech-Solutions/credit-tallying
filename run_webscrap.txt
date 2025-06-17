@@ -1,0 +1,5 @@
+@echo off
+echo Running Web Scraper...
+C:\Users\MNC Tech\AppData\Local\Programs\Python\Python39\python.exe "C:\Users\MNC Tech\OneDrive\Desktop\web_scrap\web_scraper.py"
+echo Script execution completed.
+pause

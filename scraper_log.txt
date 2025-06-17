@@ -1,0 +1,113 @@
+2025-05-13 13:41:16,191 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-05-13 13:41:21,376 - INFO - No cookie popup found
+2025-05-13 13:41:22,016 - INFO - Entered email
+2025-05-13 13:41:22,165 - INFO - Entered password
+2025-05-13 13:41:22,302 - INFO - Clicked 'Sign in' button
+2025-05-13 13:41:23,464 - INFO - Clicked 'Send Security Code' button
+2025-05-13 13:41:28,503 - INFO - Retrieving OTP from Gmail...
+2025-05-13 13:41:32,735 - INFO - Retrieved OTP: 397482
+2025-05-13 13:41:34,345 - INFO - Submitted OTP
+2025-05-13 13:41:44,358 - INFO - Page title after login: SalesJourney360
+2025-05-13 13:41:46,116 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-05-13 13:41:51,606 - INFO - Billing page title: SalesJourney360
+2025-05-13 13:41:53,180 - INFO - Clicked 'Detailed Transactions' tab
+2025-05-13 13:41:58,192 - INFO - Page title after selecting tab: SalesJourney360
+2025-05-13 13:41:58,227 - INFO - Retrieved start date from file: 2025-04-16 10:16:18
+2025-05-13 13:41:58,227 - INFO - Using start date-time: 2025-04-16 10:16:18, end date-time: 2025-05-13 13:41:58
+2025-05-13 13:41:58,316 - INFO - Date picker div found: displayed=True, enabled=True
+2025-05-13 13:41:58,748 - INFO - Clicked n-date-picker div to activate picker
+2025-05-13 13:41:59,809 - INFO - Start date-time input found: displayed=True, enabled=True
+2025-05-13 13:41:59,863 - INFO - Start date-time input attributes: {'value': '2025-05-07 13:41:53', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-05-13 13:42:00,184 - INFO - Clicked start date-time input
+2025-05-13 13:42:00,204 - INFO - Start date-time input initial value: 2025-05-07 13:41:53
+2025-05-13 13:42:00,733 - INFO - JavaScript clear succeeded for Start date-time input
+2025-05-13 13:42:01,443 - INFO - Verified start date-time: 2025-04-16 10:16:18
+2025-05-13 13:42:06,641 - INFO - Clicked 'Confirm' button for start date-time
+2025-05-13 13:42:06,775 - INFO - End date-time input found: displayed=True, enabled=True
+2025-05-13 13:42:06,874 - INFO - End date-time input attributes: {'value': '2025-05-13 13:41:53', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-05-13 13:42:07,307 - INFO - Clicked end date-time input
+2025-05-13 13:42:07,324 - INFO - End date-time input initial value: 2025-05-13 13:41:53
+2025-05-13 13:42:07,847 - INFO - JavaScript clear succeeded for End date-time input
+2025-05-13 13:42:08,474 - INFO - Verified end date-time: 2025-05-13 13:41:58
+2025-05-13 13:42:13,634 - INFO - Clicked 'Confirm' button for end date-time
+2025-05-13 13:42:28,865 - INFO - Clicked 'Export' button
+2025-05-13 13:42:34,266 - INFO - Clicked the selection div to activate input
+2025-05-13 13:42:41,677 - INFO - Entered and confirmed email in modal: kai.ying@mnctechsolutions.com
+2025-05-13 13:42:42,762 - INFO - Clicked 'Export CSV' button
+2025-05-13 13:42:45,776 - INFO - Page title after exporting: SalesJourney360
+2025-05-13 13:42:45,778 - INFO - Saved end date to file: 2025-05-13 13:41:58.227712
+2025-05-13 13:42:45,778 - INFO - Waiting for export email to arrive...
+2025-05-13 13:42:57,671 - ERROR - Error retrieving download link: can't compare offset-naive and offset-aware datetimes
+2025-05-13 13:42:57,913 - INFO - Export email not found yet, waiting 30 seconds...
+2025-05-13 13:43:29,678 - ERROR - Error retrieving download link: can't compare offset-naive and offset-aware datetimes
+2025-05-13 13:43:29,920 - INFO - Export email not found yet, waiting 30 seconds...
+2025-05-13 13:44:01,705 - ERROR - Error retrieving download link: can't compare offset-naive and offset-aware datetimes
+2025-05-13 13:44:01,945 - INFO - Export email not found yet, waiting 30 seconds...
+2025-05-13 13:44:27,519 - ERROR - Error retrieving download link: can't compare offset-naive and offset-aware datetimes
+2025-05-13 13:44:27,753 - INFO - Export email not found yet, waiting 30 seconds...
+2025-05-13 13:44:33,757 - INFO - Browser remains open for manual inspection
+2025-05-30 13:38:34,144 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-05-30 13:38:39,464 - INFO - No cookie popup found
+2025-05-30 13:38:39,653 - INFO - Saved screenshot before login attempt
+2025-05-30 13:38:42,208 - INFO - Entered email
+2025-05-30 13:38:43,404 - INFO - Entered password
+2025-05-30 13:38:44,503 - INFO - Saved screenshot before clicking sign in
+2025-05-30 13:38:45,701 - INFO - Clicked 'Sign in' button
+2025-05-30 13:38:50,907 - INFO - No error message found, proceeding with verification
+2025-05-30 13:38:50,992 - INFO - Saved screenshot after login attempt
+2025-05-30 13:38:51,140 - INFO - Clicked 'Send Security Code' button
+2025-05-30 13:38:56,202 - INFO - Retrieving OTP from Gmail...
+2025-05-30 13:38:58,138 - INFO - Retrieved OTP: 506784
+2025-05-30 13:38:59,784 - INFO - Submitted OTP
+2025-05-30 13:39:09,801 - INFO - Page title after login: SalesJourney360
+2025-05-30 13:39:10,951 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-05-30 13:39:15,964 - INFO - Billing page title: SalesJourney360
+2025-05-30 13:39:16,216 - INFO - Clicked 'Detailed Transactions' tab
+2025-05-30 13:39:21,231 - INFO - Page title after selecting tab: SalesJourney360
+2025-05-30 13:39:21,246 - INFO - Retrieved start date from file: 2025-05-13 13:41:58
+2025-05-30 13:39:21,247 - INFO - Using start date-time: 2025-05-13 13:41:58, end date-time: 2025-05-30 13:39:21
+2025-05-30 13:39:21,315 - INFO - Date picker div found: displayed=True, enabled=True
+2025-05-30 13:39:21,704 - INFO - Clicked n-date-picker div to activate picker
+2025-05-30 13:39:22,821 - INFO - Start date-time input found: displayed=True, enabled=True
+2025-05-30 13:39:22,882 - INFO - Start date-time input attributes: {'value': '2025-05-24 13:39:16', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-05-30 13:39:23,195 - INFO - Clicked start date-time input
+2025-05-30 13:39:23,208 - INFO - Start date-time input initial value: 2025-05-24 13:39:16
+2025-05-30 13:39:23,729 - INFO - JavaScript clear succeeded for Start date-time input
+2025-05-30 13:39:24,395 - INFO - Verified start date-time: 2025-05-13 13:41:58
+2025-05-30 13:39:29,559 - INFO - Clicked 'Confirm' button for start date-time
+2025-05-30 13:39:29,666 - INFO - End date-time input found: displayed=True, enabled=True
+2025-05-30 13:39:29,722 - INFO - End date-time input attributes: {'value': '2025-05-30 13:39:16', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-05-30 13:39:30,050 - INFO - Clicked end date-time input
+2025-05-30 13:39:30,055 - INFO - End date-time input initial value: 2025-05-30 13:39:16
+2025-05-30 13:39:30,591 - INFO - JavaScript clear succeeded for End date-time input
+2025-05-30 13:39:31,323 - INFO - Verified end date-time: 2025-05-30 13:39:21
+2025-05-30 13:39:36,547 - INFO - Clicked 'Confirm' button for end date-time
+2025-05-30 13:39:51,757 - INFO - Clicked 'Export' button
+2025-05-30 13:39:57,175 - INFO - Clicked the selection div to activate input
+2025-05-30 13:40:04,529 - INFO - Entered and confirmed email in modal: kai.ying@mnctechsolutions.com
+2025-05-30 13:40:05,607 - INFO - Clicked 'Export CSV' button
+2025-05-30 13:40:08,619 - INFO - Page title after exporting: SalesJourney360
+2025-05-30 13:40:08,620 - INFO - Saved end date to file: 2025-05-30 13:39:21.247218
+2025-05-30 13:40:08,620 - INFO - Waiting for export email to arrive...
+2025-05-30 13:40:19,867 - INFO - Connected to Gmail and selected inbox
+2025-05-30 13:40:20,135 - INFO - Found 14 matching emails
+2025-05-30 13:40:20,504 - INFO - Latest email - Subject: Transaction List, Date: 2025-05-30 05:40:16+00:00
+2025-05-30 13:40:20,505 - INFO - Email body preview: <div class='email-content' style='background-color:#EAF0F6;'>
+
+  <!--[if mso | IE]><table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
+
+  <div
+    style='background:#ffffff;background-color:#ffffff;margin:0px auto;max-width:600px;'
+  >
+
+    <table
+      align='center'
+      border='0'
+      cellpadding='0'
+      cellspacing='0'
+      role='
+2025-05-30 13:40:20,506 - INFO - Found download URL: https://email.lc.salesjourney360.com/c/eJxsk7tyqzwUhZ8GOnuEkLgUFI4JvsfxNXGajJA2IBsQRoCNn_6feFL8Z85pVGgvaX2zZy3-LUVgJ4WXHaencI42BZlfIX-sTBEgTxCfmxBYLvGoZzuWa0LBZP7d9BUENbuZUHayVmUBZRNUtRItb6QqzSzwKEUMeMKJyyjwWCDqWgAsET7yfE5MGWCEKaI2QpQgyxkiwR0hvJgTEscuCIOgnA81y0GfVVuX0NsOGnJVmHmQNU2lDXtk4MjAkW5UzVIYpkqlObBK6h-ZgaNMplkOHeSDmPELlGLIqkpXqvmdNzUrNXsiD3KVagNH_1qFgaMf1gGiAxsNLJxYjLmcUwNH1pDrzrCjydN6xDloPROGHQpIWJs3gxo6uA_inAkYVDlrElUXBqYE_c0mWTFMNdSd5MA4V235y-m83itZgzbs0HKJb3kesRwDOzuZlqxpazDsEJbzZIXoG0-r_cnavc_pVMAumU5LlNEYO43bv6cTvnm5-71d-MuPbjvO1hrNk0NsSZTeb3hTfqyXbaRndBF2E8ejEbqmQrNyvZ-rB3G8HdkeN_ujd54sc_62ReXc3ul15Fq5VbjvL3w7f2Wh9jXxV5dkQrL4vnpRp5Uence6O9_oJIvxycAURyE-LtZSXR4jUPxh-8vV-OVthxlyP3fvs_HoKSL2TYaof9Ejb3FaPM5jl4WTObwKZ_NwxPTUZ7u3hYynB-p37X3zeb6gw3p227SUzGbjFfRWkqTqc2x_LNMr3vabD92_v4nDeTe--sftFHu2f8Vf3gZldXhbkO7rfNkXayfb330Q4sthh8dtsjjH1s3A1A6fh1lAkykRsEqapWpkIjn7yc-3Vm3NIRCyBt78OXq25f83ZlWrTgqogxyY4KosgTeqNuvgwuSwl2VqEFSUvAGeaZW3P2-emTZ_Xf74rAm4Kr7_2eEuwP8FAAD__5nqTPk
+2025-05-30 13:40:23,356 - INFO - CSV file downloaded and saved to: C:\Users\MNC Tech\OneDrive\Desktop\web_scrap (maybe fixed)\web_scrap\csv_files\transaction_list_20250530_134020.csv
+2025-05-30 13:40:23,357 - INFO - Created flag file to notify CSV processor
+2025-05-30 13:40:23,358 - INFO - Successfully downloaded CSV to: C:\Users\MNC Tech\OneDrive\Desktop\web_scrap (maybe fixed)\web_scrap\csv_files\transaction_list_20250530_134020.csv
+2025-05-30 13:40:23,358 - INFO - Browser remains open for manual inspection
