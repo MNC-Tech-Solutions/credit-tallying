@@ -6,7 +6,7 @@ ini_set('display_errors', 1);
 
 // Define the path to the CSV files directory relative to this script
 $scriptDir = dirname(__FILE__); // Get the directory where this script is located
-$csvDirectory = dirname($scriptDir) . '/csv_files'; // Go up one level and into csv_files
+$csvDirectory = $scriptDir . '\csv_files'; // Go up one level and into csv_files
 
 // Debug information
 echo "Script location: " . $scriptDir . "<br>";

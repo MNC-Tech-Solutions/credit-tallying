@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -23,7 +24,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # File handler for scraper_log.txt
-file_handler = logging.FileHandler(r"C:\Users\MNC Tech\OneDrive\Desktop\web_scrap (maybe fixed)\web_scrap\scraper_log.txt")
+file_handler = logging.FileHandler(r"C:\xampp\htdocs\credit-tallying\scraper_log.txt")
 file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 logger.addHandler(file_handler)
 
@@ -32,14 +33,11 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 logger.addHandler(console_handler)
 
-# Step 1: Specify the path to ChromeDriver
-chromedriver_path = r"C:\Users\MNC Tech\OneDrive\Desktop\web_scrap (maybe fixed)\web_scrap\chromedriver.exe"
-
-# Step 2: Define GHL URLs and credentials
+# Step 1: Define GHL URLs and credentials
 website_url = "https://app.salesjourney360.com"
 billing_url = "https://app.salesjourney360.com/settings/billing?tab=wallet_transactions"
 
-# Get credentials from environment variables
+# Get credentials
 username = "kai.ying@mnctechsolutions.com"
 password = "20021117Cky@"
 app_password = "fvin lerm bdfs tskj"
@@ -47,11 +45,11 @@ app_password = "fvin lerm bdfs tskj"
 if not all([username, password, app_password]):
     raise ValueError("Required environment variables not set (USERNAME, PASSWORD, GMAIL_APP_PASSWORD)")
 
-# Step 3: Paths for CSV and last export date
-csv_dir = r"C:\Users\MNC Tech\OneDrive\Desktop\web_scrap (maybe fixed)\web_scrap\csv_files"
-last_export_date_file = r"C:\Users\MNC Tech\OneDrive\Desktop\web_scrap (maybe fixed)\web_scrap\last_export_date.txt"
+# Step 2: Paths for CSV and last export date
+csv_dir = r"C:\xampp\htdocs\credit-tallying\csv_files"
+last_export_date_file = r"C:\xampp\htdocs\credit-tallying\last_export_date.txt"
 
-# Step 4: Function to get the start date from stored file
+# Step 3: Function to get the start date from stored file
 def get_start_date():
     try:
         # Check if last_export_date.txt exists
@@ -70,7 +68,7 @@ def get_start_date():
         logging.error(f"Error getting start date: {e}")
         return datetime.now() - timedelta(days=180)
 
-# Step 5: Function to save the end date
+# Step 4: Function to save the end date
 def save_end_date(end_date):
     try:
         with open(last_export_date_file, "w") as f:
@@ -79,7 +77,7 @@ def save_end_date(end_date):
     except Exception as e:
         logging.error(f"Error saving end date: {e}")
 
-# Step 6: Set up Chrome options with recommended settings
+# Step 5: Set up Chrome options with recommended settings
 chrome_options = Options()
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
@@ -89,11 +87,11 @@ chrome_options.add_argument("--disable-popup-blocking")
 chrome_options.add_argument("--start-maximized")
 chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
-# Step 7: Set up Selenium WebDriver
-service = Service(chromedriver_path)
+# Step 6: Set up Selenium WebDriver
+service = Service(ChromeDriverManager().install())
 driver = webdriver.Chrome(service=service, options=chrome_options)
 
-# Step 8: Function to retrieve OTP from Gmail using IMAP
+# Step 7: Function to retrieve OTP from Gmail using IMAP
 def get_otp_from_gmail():
     try:
         # Connect to Gmail IMAP server
@@ -153,7 +151,7 @@ def get_otp_from_gmail():
     finally:
         mail.logout()
 
-# Step 9: Function to retrieve the download link for the exported CSV from Gmail
+# Step 8: Function to retrieve the download link for the exported CSV from Gmail
 def get_export_download_link(export_start_time):
     try:
         # Make export_start_time timezone-naive if it has timezone info
@@ -243,7 +241,7 @@ def get_export_download_link(export_start_time):
         except:
             pass
 
-# Step 10: Function to download the CSV file and save it to csv_files
+# Step 9: Function to download the CSV file and save it to csv_files
 def download_csv(download_url):
     try:
         # Define the save directory
@@ -280,11 +278,11 @@ def download_csv(download_url):
         return None
 
 try:
-    # Step 11: Navigate to the GHL website
+    # Step 10: Navigate to the GHL website
     driver.get(website_url)
     logging.info(f"Successfully opened the website: {website_url}")
 
-    # Step 12: Handle potential overlays (e.g., cookie popup)
+    # Step 11: Handle potential overlays (e.g., cookie popup)
     try:
         cookie_button = WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Accept')]"))
@@ -294,7 +292,7 @@ try:
     except:
         logging.info("No cookie popup found")
 
-    # Step 13: Wait for the email field to be clickable and handle potential overlays
+    # Step 12: Wait for the email field to be clickable and handle potential overlays
     try:
         # Wait for any loading overlay to disappear
         WebDriverWait(driver, 10).until_not(
@@ -315,13 +313,13 @@ try:
         ActionChains(driver).move_to_element(email_field).click().perform()
         time.sleep(1)  # Short pause after clicking
 
-        # Step 14: Enter the email
+        # Step 13: Enter the email
         email_field.clear()  # Clear any existing text
         email_field.send_keys(username)
         logging.info("Entered email")
         time.sleep(1)  # Short pause after entering email
 
-        # Step 15: Enter the password
+        # Step 14: Enter the password
         password_field = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.NAME, "password"))
         )
@@ -333,7 +331,7 @@ try:
         # Take another screenshot before clicking sign in
         logging.info("Saved screenshot before clicking sign in")
 
-        # Step 16: Click the "Sign in" button
+        # Step 15: Click the "Sign in" button
         login_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign in')]"))
         )
@@ -359,26 +357,26 @@ try:
         logging.error(f"Error during login process: {e}")
         raise
 
-    # Step 17: Wait for the verification page and click "Send Security Code"
+    # Step 16: Wait for the verification page and click "Send Security Code"
     send_code_button = WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Send Security Code')]"))
     )
     send_code_button.click()
     logging.info("Clicked 'Send Security Code' button")
 
-    # Step 18: Wait for OTP prompt
+    # Step 17: Wait for OTP prompt
     time.sleep(5)  # Wait for the OTP page to load
     otp_field = WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.NAME, "otp"))
     )
 
-    # Step 19: Retrieve OTP from Gmail
+    # Step 18: Retrieve OTP from Gmail
     logging.info("Retrieving OTP from Gmail...")
     otp = get_otp_from_gmail()
     if not otp:
         raise Exception("Failed to retrieve OTP")
 
-    # Step 20: Enter the OTP
+    # Step 19: Enter the OTP
     otp_fields = WebDriverWait(driver, 10).until(
         EC.presence_of_all_elements_located((By.CLASS_NAME, "otp-input"))
     )
@@ -391,19 +389,19 @@ try:
         otp_fields[i].send_keys(digit)
     logging.info("Submitted OTP")
 
-    # Step 21: Wait and verify login
+    # Step 20: Wait and verify login
     time.sleep(10)  # Wait to ensure page loads
     page_title = driver.title
     logging.info(f"Page title after login: {page_title}")
 
-    # Step 22: Navigate to the billing page
+    # Step 21: Navigate to the billing page
     driver.get(billing_url)
     logging.info(f"Navigated to billing page: {billing_url}")
     time.sleep(5)  # Wait for the billing page to load
     billing_page_title = driver.title
     logging.info(f"Billing page title: {billing_page_title}")
 
-    # Step 23: Select the "Detailed Transactions" tab
+    # Step 22: Select the "Detailed Transactions" tab
     detailed_tab = WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.XPATH, "//div[@data-name='detailed']"))
     )
@@ -413,24 +411,24 @@ try:
     time.sleep(5)  # Wait for tab content to load
     logging.info(f"Page title after selecting tab: {driver.title}")
 
-    # Step 24: Get start and end dates
+    # Step 23: Get start and end dates
     start_date = get_start_date()
     end_date = datetime.now()
     start_date_time_str = start_date.strftime("%Y-%m-%d %H:%M:%S")  # e.g., 2025-04-16 10:16:18
     end_date_time_str = end_date.strftime("%Y-%m-%d %H:%M:%S")      # e.g., 2025-05-09 15:24:25
     logging.info(f"Using start date-time: {start_date_time_str}, end date-time: {end_date_time_str}")
 
-    # Step 25: Interact with the date-time picker to set start and end date-times
+    # Step 24: Interact with the Advanced Filters button before date-time picker
     try:
-        # Click the n-date-picker div to activate the picker
-        date_picker_div = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.ID, "date-picker"))
+        # Click the Advanced Filters button to reveal date picker
+        advanced_filters_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "AdvancedFiltersButton"))
         )
-        logging.info(f"Date picker div found: displayed={date_picker_div.is_displayed()}, enabled={date_picker_div.is_enabled()}")
-        driver.execute_script("arguments[0].scrollIntoView(true);", date_picker_div)
-        ActionChains(driver).move_to_element(date_picker_div).click().perform()
-        logging.info("Clicked n-date-picker div to activate picker")
-        time.sleep(1)  # Wait for picker to activate
+        logging.info(f"Advanced Filters button found: displayed={advanced_filters_button.is_displayed()}, enabled={advanced_filters_button.is_enabled()}")
+        driver.execute_script("arguments[0].scrollIntoView(true);", advanced_filters_button)
+        ActionChains(driver).move_to_element(advanced_filters_button).click().perform()
+        logging.info("Clicked Advanced Filters button")
+        time.sleep(2)  # Wait for any UI updates after button click
 
         # Helper function to clear a field
         def clear_field(field, field_name):
@@ -542,6 +540,22 @@ try:
         except TimeoutException:
             logging.info("No 'Confirm' button found for end date-time, proceeding")
 
+        # add apply
+        try:
+            apply_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[@class='n-button n-button--primary-type n-button--medium-type' and .//span[text()='Apply']]"))
+            )
+            logging.info(f"Apply button found: displayed={apply_button.is_displayed()}, enabled={apply_button.is_enabled()}")
+            driver.execute_script("arguments[0].scrollIntoView(true);", apply_button)
+            ActionChains(driver).move_to_element(apply_button).click().perform()
+            logging.info("Clicked 'Apply' button")
+            time.sleep(2)  # Wait for any UI updates after apply
+        except TimeoutException:
+            logging.error("Apply button not found or not clickable")
+            raise Exception("Failed to locate or click the Apply button")
+
+        time.sleep(60)
+
     except Exception as e:
         logging.error(f"Failed to interact with date-time picker: {e}")
         # Fallback: Set date-times directly without picker
@@ -568,7 +582,7 @@ try:
             logging.error(f"Fallback direct input failed: {fallback_e}")
             raise
 
-    # Step 26: Wait 5 seconds before clicking "Export"
+    # Step 25: Wait 5 seconds before clicking "Export"
     time.sleep(15)
     export_button = WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.ID, "TransactionExportButton"))
@@ -578,7 +592,7 @@ try:
     logging.info("Clicked 'Export' button")
     time.sleep(5)  # Wait for modal to fully load
 
-    # Step 27: Enter the user email in the export modal
+    # Step 26: Enter the user email in the export modal
     selection_div = WebDriverWait(driver, 5).until(
         EC.element_to_be_clickable((By.ID, "SearchUserSelect"))
     )
@@ -590,7 +604,7 @@ try:
     logging.info(f"Entered and confirmed email in modal: {username}")
     time.sleep(1)  # Wait for the modal to process the input
 
-    # Step 28: Click the "Export CSV" button in the modal
+    # Step 27: Click the "Export CSV" button in the modal
     export_csv_button = WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.ID, "ExportTransactionsFooter-btn-positive-action"))
     )
@@ -600,10 +614,10 @@ try:
     time.sleep(3)  # Wait for the export action to complete
     logging.info(f"Page title after exporting: {driver.title}")
 
-    # Step 29: Save the end date for the next run
+    # Step 28: Save the end date for the next run
     save_end_date(end_date)
 
-    # Step 30: Wait for the export email to arrive
+    # Step 29: Wait for the export email to arrive
     logging.info("Waiting for export email to arrive...")
     export_start_time = datetime.now()  # Record time when export is triggered
     max_wait = 600  # Maximum wait of 10 minutes
@@ -621,7 +635,7 @@ try:
     if not download_url:
         raise Exception("Export email did not arrive within 10 minutes")
 
-    # Step 31: Download the CSV file and process it
+    # Step 30: Download the CSV file and process it
     csv_path = download_csv(download_url)
     if csv_path:
         logging.info(f"Successfully downloaded CSV to: {csv_path}")
@@ -633,6 +647,6 @@ except Exception as e:
     print(f"An error occurred: {e}")
 
 finally:
-    # Step 32: Keep browser open for debugging
+    # Step 31: Keep browser open for debugging
     logging.info("Browser remains open for manual inspection")
     print("Browser remains open for manual inspection")

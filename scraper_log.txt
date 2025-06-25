@@ -111,3 +111,546 @@
 2025-05-30 13:40:23,357 - INFO - Created flag file to notify CSV processor
 2025-05-30 13:40:23,358 - INFO - Successfully downloaded CSV to: C:\Users\MNC Tech\OneDrive\Desktop\web_scrap (maybe fixed)\web_scrap\csv_files\transaction_list_20250530_134020.csv
 2025-05-30 13:40:23,358 - INFO - Browser remains open for manual inspection
+2025-06-24 17:28:37,915 - INFO - ====== WebDriver manager ======
+2025-06-24 17:28:39,371 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-24 17:28:39,431 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-24 17:28:39,474 - INFO - There is no [win64] chromedriver "137.0.7151.119" for browser google-chrome "137.0.7151" in cache
+2025-06-24 17:28:39,475 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-24 17:28:39,893 - INFO - WebDriver version 137.0.7151.119 selected
+2025-06-24 17:28:39,897 - INFO - Modern chrome version https://storage.googleapis.com/chrome-for-testing-public/137.0.7151.119/win32/chromedriver-win32.zip
+2025-06-24 17:28:39,897 - INFO - About to download new driver from https://storage.googleapis.com/chrome-for-testing-public/137.0.7151.119/win32/chromedriver-win32.zip
+2025-06-24 17:28:39,985 - INFO - Driver downloading response is 200
+2025-06-24 17:28:41,693 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-24 17:28:42,766 - INFO - Driver has been saved in cache [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119]
+2025-06-24 17:28:47,538 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-24 17:28:52,737 - INFO - No cookie popup found
+2025-06-24 17:28:52,895 - INFO - Saved screenshot before login attempt
+2025-06-24 17:28:55,447 - INFO - Entered email
+2025-06-24 17:28:56,740 - INFO - Entered password
+2025-06-24 17:28:57,740 - INFO - Saved screenshot before clicking sign in
+2025-06-24 17:28:59,024 - INFO - Clicked 'Sign in' button
+2025-06-24 17:29:04,273 - INFO - No error message found, proceeding with verification
+2025-06-24 17:29:04,275 - INFO - Saved screenshot after login attempt
+2025-06-24 17:29:04,439 - INFO - Clicked 'Send Security Code' button
+2025-06-24 17:29:09,482 - INFO - Retrieving OTP from Gmail...
+2025-06-24 17:29:11,989 - INFO - Retrieved OTP: 379295
+2025-06-24 17:29:13,695 - INFO - Submitted OTP
+2025-06-24 17:29:23,709 - INFO - Page title after login: SalesJourney360
+2025-06-24 17:29:25,600 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-24 17:29:30,809 - INFO - Billing page title: SalesJourney360
+2025-06-24 17:29:31,714 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-24 17:29:36,727 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-24 17:29:36,776 - ERROR - Error getting start date: unconverted data remains:  10:16:18
+2025-06-24 17:29:36,777 - INFO - Using start date-time: 2024-12-26 17:29:36, end date-time: 2025-06-24 17:29:36
+2025-06-24 17:29:47,265 - ERROR - Failed to interact with date-time picker: Message: 
+Stacktrace:
+	GetHandleVerifier [0x0x393b03+62899]
+	GetHandleVerifier [0x0x393b44+62964]
+	(No symbol) [0x0x1c10f3]
+	(No symbol) [0x0x20980e]
+	(No symbol) [0x0x209bab]
+	(No symbol) [0x0x2525c2]
+	(No symbol) [0x0x22e554]
+	(No symbol) [0x0x24fd81]
+	(No symbol) [0x0x22e306]
+	(No symbol) [0x0x1fd670]
+	(No symbol) [0x0x1fe4e4]
+	GetHandleVerifier [0x0x5f4793+2556483]
+	GetHandleVerifier [0x0x5efd02+2537394]
+	GetHandleVerifier [0x0x3ba2fa+220586]
+	GetHandleVerifier [0x0x3aaae8+157080]
+	GetHandleVerifier [0x0x3b141d+184013]
+	GetHandleVerifier [0x0x39ba68+95512]
+	GetHandleVerifier [0x0x39bc10+95936]
+	GetHandleVerifier [0x0x386b5a+9738]
+	BaseThreadInitThunk [0x0x76b95d49+25]
+	RtlInitializeExceptionChain [0x0x778ad09b+107]
+	RtlGetAppContainerNamedObjectPath [0x0x778ad021+561]
+
+2025-06-24 17:29:47,265 - INFO - Attempting direct date-time input without picker
+2025-06-24 17:29:47,284 - ERROR - Fallback direct input failed: Message: no such element: Unable to locate element: {"method":"xpath","selector":"//input[@class='n-input__input-el' and @placeholder='Start Date and Time']"}
+  (Session info: chrome=137.0.7151.105); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#no-such-element-exception
+Stacktrace:
+	GetHandleVerifier [0x0x393b03+62899]
+	GetHandleVerifier [0x0x393b44+62964]
+	(No symbol) [0x0x1c10f3]
+	(No symbol) [0x0x20980e]
+	(No symbol) [0x0x209bab]
+	(No symbol) [0x0x2525c2]
+	(No symbol) [0x0x22e554]
+	(No symbol) [0x0x24fd81]
+	(No symbol) [0x0x22e306]
+	(No symbol) [0x0x1fd670]
+	(No symbol) [0x0x1fe4e4]
+	GetHandleVerifier [0x0x5f4793+2556483]
+	GetHandleVerifier [0x0x5efd02+2537394]
+	GetHandleVerifier [0x0x3ba2fa+220586]
+	GetHandleVerifier [0x0x3aaae8+157080]
+	GetHandleVerifier [0x0x3b141d+184013]
+	GetHandleVerifier [0x0x39ba68+95512]
+	GetHandleVerifier [0x0x39bc10+95936]
+	GetHandleVerifier [0x0x386b5a+9738]
+	BaseThreadInitThunk [0x0x76b95d49+25]
+	RtlInitializeExceptionChain [0x0x778ad09b+107]
+	RtlGetAppContainerNamedObjectPath [0x0x778ad021+561]
+
+2025-06-24 17:29:47,284 - ERROR - An error occurred: Message: no such element: Unable to locate element: {"method":"xpath","selector":"//input[@class='n-input__input-el' and @placeholder='Start Date and Time']"}
+  (Session info: chrome=137.0.7151.105); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#no-such-element-exception
+Stacktrace:
+	GetHandleVerifier [0x0x393b03+62899]
+	GetHandleVerifier [0x0x393b44+62964]
+	(No symbol) [0x0x1c10f3]
+	(No symbol) [0x0x20980e]
+	(No symbol) [0x0x209bab]
+	(No symbol) [0x0x2525c2]
+	(No symbol) [0x0x22e554]
+	(No symbol) [0x0x24fd81]
+	(No symbol) [0x0x22e306]
+	(No symbol) [0x0x1fd670]
+	(No symbol) [0x0x1fe4e4]
+	GetHandleVerifier [0x0x5f4793+2556483]
+	GetHandleVerifier [0x0x5efd02+2537394]
+	GetHandleVerifier [0x0x3ba2fa+220586]
+	GetHandleVerifier [0x0x3aaae8+157080]
+	GetHandleVerifier [0x0x3b141d+184013]
+	GetHandleVerifier [0x0x39ba68+95512]
+	GetHandleVerifier [0x0x39bc10+95936]
+	GetHandleVerifier [0x0x386b5a+9738]
+	BaseThreadInitThunk [0x0x76b95d49+25]
+	RtlInitializeExceptionChain [0x0x778ad09b+107]
+	RtlGetAppContainerNamedObjectPath [0x0x778ad021+561]
+
+2025-06-24 17:29:47,286 - INFO - Browser remains open for manual inspection
+2025-06-25 11:33:10,113 - INFO - ====== WebDriver manager ======
+2025-06-25 11:33:12,281 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:33:12,426 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:33:12,611 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:33:12,736 - INFO - WebDriver version 137.0.7151.119 selected
+2025-06-25 11:33:12,739 - INFO - Modern chrome version https://storage.googleapis.com/chrome-for-testing-public/137.0.7151.119/win32/chromedriver-win32.zip
+2025-06-25 11:33:12,739 - INFO - About to download new driver from https://storage.googleapis.com/chrome-for-testing-public/137.0.7151.119/win32/chromedriver-win32.zip
+2025-06-25 11:33:12,795 - INFO - Driver downloading response is 200
+2025-06-25 11:33:14,903 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:33:15,942 - INFO - Driver has been saved in cache [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119]
+2025-06-25 11:33:21,055 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 11:33:26,316 - INFO - No cookie popup found
+2025-06-25 11:33:26,485 - INFO - Saved screenshot before login attempt
+2025-06-25 11:33:29,007 - INFO - Entered email
+2025-06-25 11:33:30,251 - INFO - Entered password
+2025-06-25 11:33:31,259 - INFO - Saved screenshot before clicking sign in
+2025-06-25 11:33:32,537 - INFO - Clicked 'Sign in' button
+2025-06-25 11:33:37,760 - INFO - No error message found, proceeding with verification
+2025-06-25 11:33:37,761 - INFO - Saved screenshot after login attempt
+2025-06-25 11:33:37,927 - INFO - Clicked 'Send Security Code' button
+2025-06-25 11:33:42,977 - INFO - Retrieving OTP from Gmail...
+2025-06-25 11:33:45,273 - INFO - Retrieved OTP: 941135
+2025-06-25 11:33:46,671 - INFO - Submitted OTP
+2025-06-25 11:33:56,682 - INFO - Page title after login: SalesJourney360
+2025-06-25 11:33:57,766 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-25 11:34:03,107 - INFO - Billing page title: SalesJourney360
+2025-06-25 11:34:03,558 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-25 11:34:08,571 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-25 11:34:08,587 - ERROR - Error getting start date: unconverted data remains:  10:16:18
+2025-06-25 11:34:08,589 - INFO - Using start date-time: 2024-12-27 11:34:08, end date-time: 2025-06-25 11:34:08
+2025-06-25 11:34:08,729 - INFO - Advanced Filters button found: displayed=True, enabled=True
+2025-06-25 11:34:09,085 - INFO - Clicked Advanced Filters button
+2025-06-25 11:34:21,446 - ERROR - Failed to interact with date-time picker: Message: 
+Stacktrace:
+	GetHandleVerifier [0x0x3d3b03+62899]
+	GetHandleVerifier [0x0x3d3b44+62964]
+	(No symbol) [0x0x2010f3]
+	(No symbol) [0x0x24980e]
+	(No symbol) [0x0x249bab]
+	(No symbol) [0x0x2925c2]
+	(No symbol) [0x0x26e554]
+	(No symbol) [0x0x28fd81]
+	(No symbol) [0x0x26e306]
+	(No symbol) [0x0x23d670]
+	(No symbol) [0x0x23e4e4]
+	GetHandleVerifier [0x0x634793+2556483]
+	GetHandleVerifier [0x0x62fd02+2537394]
+	GetHandleVerifier [0x0x3fa2fa+220586]
+	GetHandleVerifier [0x0x3eaae8+157080]
+	GetHandleVerifier [0x0x3f141d+184013]
+	GetHandleVerifier [0x0x3dba68+95512]
+	GetHandleVerifier [0x0x3dbc10+95936]
+	GetHandleVerifier [0x0x3c6b5a+9738]
+	BaseThreadInitThunk [0x0x76b95d49+25]
+	RtlInitializeExceptionChain [0x0x778ad09b+107]
+	RtlGetAppContainerNamedObjectPath [0x0x778ad021+561]
+
+2025-06-25 11:34:21,447 - INFO - Attempting direct date-time input without picker
+2025-06-25 11:34:21,544 - INFO - Set start date-time directly: 2024-12-27 11:34:08
+2025-06-25 11:34:21,608 - INFO - Set end date-time directly: 2025-06-25 11:34:08
+2025-06-25 11:34:21,609 - INFO - Browser remains open for manual inspection
+2025-06-25 11:46:15,525 - INFO - ====== WebDriver manager ======
+2025-06-25 11:46:17,024 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:46:17,111 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:46:17,173 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 11:46:21,698 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 11:46:26,903 - INFO - No cookie popup found
+2025-06-25 11:46:27,023 - INFO - Saved screenshot before login attempt
+2025-06-25 11:46:29,554 - INFO - Entered email
+2025-06-25 11:46:30,760 - INFO - Entered password
+2025-06-25 11:46:31,761 - INFO - Saved screenshot before clicking sign in
+2025-06-25 11:46:33,115 - INFO - Clicked 'Sign in' button
+2025-06-25 11:46:38,389 - INFO - No error message found, proceeding with verification
+2025-06-25 11:46:38,390 - INFO - Saved screenshot after login attempt
+2025-06-25 11:46:38,556 - INFO - Clicked 'Send Security Code' button
+2025-06-25 11:46:43,609 - INFO - Retrieving OTP from Gmail...
+2025-06-25 11:46:46,627 - INFO - Retrieved OTP: 568194
+2025-06-25 11:46:48,229 - INFO - Submitted OTP
+2025-06-25 11:46:58,245 - INFO - Page title after login: SalesJourney360
+2025-06-25 11:46:59,429 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-25 11:47:04,440 - INFO - Billing page title: SalesJourney360
+2025-06-25 11:47:04,756 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-25 11:47:09,767 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-25 11:47:09,771 - ERROR - Error getting start date: unconverted data remains:  10:16:18
+2025-06-25 11:47:09,772 - INFO - Using start date-time: 2024-12-27 11:47:09, end date-time: 2025-06-25 11:47:09
+2025-06-25 11:47:09,872 - INFO - Advanced Filters button found: displayed=True, enabled=True
+2025-06-25 11:47:10,252 - INFO - Clicked Advanced Filters button
+2025-06-25 11:47:12,343 - INFO - Start date-time input found: displayed=True, enabled=True
+2025-06-25 11:47:12,479 - INFO - Start date-time input attributes: {'value': '2025-06-18 11:47:04', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 11:47:12,847 - INFO - Clicked start date-time input
+2025-06-25 11:47:12,855 - INFO - Start date-time input initial value: 2025-06-18 11:47:04
+2025-06-25 11:47:13,401 - INFO - JavaScript clear succeeded for Start date-time input
+2025-06-25 11:47:14,140 - INFO - Verified start date-time: 2024-12-27 11:47:09
+2025-06-25 11:47:19,326 - INFO - Clicked 'Confirm' button for start date-time
+2025-06-25 11:47:19,472 - INFO - End date-time input found: displayed=True, enabled=True
+2025-06-25 11:47:19,559 - INFO - End date-time input attributes: {'value': '2025-06-25 11:47:04', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 11:47:19,924 - INFO - Clicked end date-time input
+2025-06-25 11:47:19,945 - INFO - End date-time input initial value: 2025-06-25 11:47:04
+2025-06-25 11:47:20,480 - INFO - JavaScript clear succeeded for End date-time input
+2025-06-25 11:47:21,143 - INFO - Verified end date-time: 2025-06-25 11:47:09
+2025-06-25 11:47:26,144 - INFO - Browser remains open for manual inspection
+2025-06-25 11:48:49,283 - INFO - ====== WebDriver manager ======
+2025-06-25 11:48:50,570 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:48:50,620 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:48:50,880 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 11:48:56,111 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 11:49:01,331 - INFO - No cookie popup found
+2025-06-25 11:49:01,448 - INFO - Saved screenshot before login attempt
+2025-06-25 11:49:04,017 - INFO - Entered email
+2025-06-25 11:49:05,292 - INFO - Entered password
+2025-06-25 11:49:06,294 - INFO - Saved screenshot before clicking sign in
+2025-06-25 11:49:07,563 - INFO - Clicked 'Sign in' button
+2025-06-25 11:49:12,779 - INFO - No error message found, proceeding with verification
+2025-06-25 11:49:12,780 - INFO - Saved screenshot after login attempt
+2025-06-25 11:49:12,985 - INFO - Clicked 'Send Security Code' button
+2025-06-25 11:49:18,019 - INFO - Retrieving OTP from Gmail...
+2025-06-25 11:49:21,295 - INFO - Retrieved OTP: 358690
+2025-06-25 11:49:22,980 - INFO - Submitted OTP
+2025-06-25 11:49:32,995 - INFO - Page title after login: SalesJourney360
+2025-06-25 11:49:34,278 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-25 11:49:39,289 - INFO - Billing page title: SalesJourney360
+2025-06-25 11:49:41,578 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-25 11:49:46,591 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-25 11:49:46,596 - INFO - Retrieved start date from file: 2025-04-16 10:16:18
+2025-06-25 11:49:46,599 - INFO - Using start date-time: 2025-04-16 10:16:18, end date-time: 2025-06-25 11:49:46
+2025-06-25 11:49:46,726 - INFO - Advanced Filters button found: displayed=True, enabled=True
+2025-06-25 11:49:47,124 - INFO - Clicked Advanced Filters button
+2025-06-25 11:49:49,202 - INFO - Start date-time input found: displayed=True, enabled=True
+2025-06-25 11:49:49,273 - INFO - Start date-time input attributes: {'value': '2025-06-18 11:49:41', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 11:49:49,680 - INFO - Clicked start date-time input
+2025-06-25 11:49:49,702 - INFO - Start date-time input initial value: 2025-06-18 11:49:41
+2025-06-25 11:49:50,251 - INFO - JavaScript clear succeeded for Start date-time input
+2025-06-25 11:49:50,997 - INFO - Verified start date-time: 2025-04-16 10:16:18
+2025-06-25 11:49:56,166 - INFO - Clicked 'Confirm' button for start date-time
+2025-06-25 11:49:56,267 - INFO - End date-time input found: displayed=True, enabled=True
+2025-06-25 11:49:56,376 - INFO - End date-time input attributes: {'value': '2025-06-25 11:49:41', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 11:49:56,749 - INFO - Clicked end date-time input
+2025-06-25 11:49:56,768 - INFO - End date-time input initial value: 2025-06-25 11:49:41
+2025-06-25 11:49:57,332 - INFO - JavaScript clear succeeded for End date-time input
+2025-06-25 11:49:57,989 - INFO - Verified end date-time: 2025-06-25 11:49:46
+2025-06-25 11:50:03,153 - INFO - Clicked 'Confirm' button for end date-time
+2025-06-25 11:50:03,154 - INFO - Browser remains open for manual inspection
+2025-06-25 11:51:50,624 - INFO - ====== WebDriver manager ======
+2025-06-25 11:51:51,983 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:51:52,028 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 11:51:52,070 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 11:51:56,512 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 11:52:01,776 - INFO - No cookie popup found
+2025-06-25 11:52:01,883 - INFO - Saved screenshot before login attempt
+2025-06-25 11:52:04,384 - INFO - Entered email
+2025-06-25 11:52:05,635 - INFO - Entered password
+2025-06-25 11:52:06,636 - INFO - Saved screenshot before clicking sign in
+2025-06-25 11:52:07,867 - INFO - Clicked 'Sign in' button
+2025-06-25 11:52:13,100 - INFO - No error message found, proceeding with verification
+2025-06-25 11:52:13,100 - INFO - Saved screenshot after login attempt
+2025-06-25 11:52:13,290 - INFO - Clicked 'Send Security Code' button
+2025-06-25 11:52:18,336 - INFO - Retrieving OTP from Gmail...
+2025-06-25 11:52:21,098 - INFO - Retrieved OTP: 319929
+2025-06-25 11:52:22,491 - INFO - Submitted OTP
+2025-06-25 11:52:32,510 - INFO - Page title after login: SalesJourney360
+2025-06-25 11:52:33,820 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-25 11:52:39,064 - INFO - Billing page title: SalesJourney360
+2025-06-25 11:52:39,492 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-25 11:52:44,503 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-25 11:52:44,506 - INFO - Retrieved start date from file: 2025-04-16 10:16:18
+2025-06-25 11:52:44,506 - ERROR - An error occurred: 'str' object has no attribute 'strftime'
+2025-06-25 11:52:44,508 - INFO - Browser remains open for manual inspection
+2025-06-25 12:04:43,959 - INFO - ====== WebDriver manager ======
+2025-06-25 12:04:45,473 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 12:04:45,536 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 12:04:45,580 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 12:04:48,449 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 12:04:48,452 - INFO - No cookie popup found
+2025-06-25 12:04:48,456 - ERROR - Error during login process: Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=137.0.7151.105)
+Stacktrace:
+	GetHandleVerifier [0x0x3d3b03+62899]
+	GetHandleVerifier [0x0x3d3b44+62964]
+	(No symbol) [0x0x2010f3]
+	(No symbol) [0x0x1dff59]
+	(No symbol) [0x0x274f7e]
+	(No symbol) [0x0x28f6a9]
+	(No symbol) [0x0x26e306]
+	(No symbol) [0x0x23d670]
+	(No symbol) [0x0x23e4e4]
+	GetHandleVerifier [0x0x634793+2556483]
+	GetHandleVerifier [0x0x62fd02+2537394]
+	GetHandleVerifier [0x0x3fa2fa+220586]
+	GetHandleVerifier [0x0x3eaae8+157080]
+	GetHandleVerifier [0x0x3f141d+184013]
+	GetHandleVerifier [0x0x3dba68+95512]
+	GetHandleVerifier [0x0x3dbc10+95936]
+	GetHandleVerifier [0x0x3c6b5a+9738]
+	BaseThreadInitThunk [0x0x76b95d49+25]
+	RtlInitializeExceptionChain [0x0x778ad09b+107]
+	RtlGetAppContainerNamedObjectPath [0x0x778ad021+561]
+
+2025-06-25 12:04:48,456 - ERROR - An error occurred: Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=137.0.7151.105)
+Stacktrace:
+	GetHandleVerifier [0x0x3d3b03+62899]
+	GetHandleVerifier [0x0x3d3b44+62964]
+	(No symbol) [0x0x2010f3]
+	(No symbol) [0x0x1dff59]
+	(No symbol) [0x0x274f7e]
+	(No symbol) [0x0x28f6a9]
+	(No symbol) [0x0x26e306]
+	(No symbol) [0x0x23d670]
+	(No symbol) [0x0x23e4e4]
+	GetHandleVerifier [0x0x634793+2556483]
+	GetHandleVerifier [0x0x62fd02+2537394]
+	GetHandleVerifier [0x0x3fa2fa+220586]
+	GetHandleVerifier [0x0x3eaae8+157080]
+	GetHandleVerifier [0x0x3f141d+184013]
+	GetHandleVerifier [0x0x3dba68+95512]
+	GetHandleVerifier [0x0x3dbc10+95936]
+	GetHandleVerifier [0x0x3c6b5a+9738]
+	BaseThreadInitThunk [0x0x76b95d49+25]
+	RtlInitializeExceptionChain [0x0x778ad09b+107]
+	RtlGetAppContainerNamedObjectPath [0x0x778ad021+561]
+
+2025-06-25 12:04:48,459 - INFO - Browser remains open for manual inspection
+2025-06-25 12:07:29,585 - INFO - ====== WebDriver manager ======
+2025-06-25 12:07:30,958 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 12:07:30,998 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 12:07:31,035 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 12:07:33,262 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 12:07:33,264 - INFO - No cookie popup found
+2025-06-25 12:07:33,266 - ERROR - Error during login process: Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=137.0.7151.105)
+Stacktrace:
+	GetHandleVerifier [0x0x3d3b03+62899]
+	GetHandleVerifier [0x0x3d3b44+62964]
+	(No symbol) [0x0x2010f3]
+	(No symbol) [0x0x1dff59]
+	(No symbol) [0x0x274f7e]
+	(No symbol) [0x0x28f6a9]
+	(No symbol) [0x0x26e306]
+	(No symbol) [0x0x23d670]
+	(No symbol) [0x0x23e4e4]
+	GetHandleVerifier [0x0x634793+2556483]
+	GetHandleVerifier [0x0x62fd02+2537394]
+	GetHandleVerifier [0x0x3fa2fa+220586]
+	GetHandleVerifier [0x0x3eaae8+157080]
+	GetHandleVerifier [0x0x3f141d+184013]
+	GetHandleVerifier [0x0x3dba68+95512]
+	GetHandleVerifier [0x0x3dbc10+95936]
+	GetHandleVerifier [0x0x3c6b5a+9738]
+	BaseThreadInitThunk [0x0x76b95d49+25]
+	RtlInitializeExceptionChain [0x0x778ad09b+107]
+	RtlGetAppContainerNamedObjectPath [0x0x778ad021+561]
+
+2025-06-25 12:07:33,268 - ERROR - An error occurred: Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=137.0.7151.105)
+Stacktrace:
+	GetHandleVerifier [0x0x3d3b03+62899]
+	GetHandleVerifier [0x0x3d3b44+62964]
+	(No symbol) [0x0x2010f3]
+	(No symbol) [0x0x1dff59]
+	(No symbol) [0x0x274f7e]
+	(No symbol) [0x0x28f6a9]
+	(No symbol) [0x0x26e306]
+	(No symbol) [0x0x23d670]
+	(No symbol) [0x0x23e4e4]
+	GetHandleVerifier [0x0x634793+2556483]
+	GetHandleVerifier [0x0x62fd02+2537394]
+	GetHandleVerifier [0x0x3fa2fa+220586]
+	GetHandleVerifier [0x0x3eaae8+157080]
+	GetHandleVerifier [0x0x3f141d+184013]
+	GetHandleVerifier [0x0x3dba68+95512]
+	GetHandleVerifier [0x0x3dbc10+95936]
+	GetHandleVerifier [0x0x3c6b5a+9738]
+	BaseThreadInitThunk [0x0x76b95d49+25]
+	RtlInitializeExceptionChain [0x0x778ad09b+107]
+	RtlGetAppContainerNamedObjectPath [0x0x778ad021+561]
+
+2025-06-25 12:07:33,270 - INFO - Browser remains open for manual inspection
+2025-06-25 12:07:48,306 - INFO - ====== WebDriver manager ======
+2025-06-25 12:07:49,839 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 12:07:49,881 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 12:07:49,914 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 12:07:54,492 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 12:07:59,716 - INFO - No cookie popup found
+2025-06-25 12:07:59,835 - INFO - Saved screenshot before login attempt
+2025-06-25 12:08:02,344 - INFO - Entered email
+2025-06-25 12:08:03,513 - INFO - Entered password
+2025-06-25 12:08:04,514 - INFO - Saved screenshot before clicking sign in
+2025-06-25 12:08:05,803 - INFO - Clicked 'Sign in' button
+2025-06-25 12:08:11,048 - INFO - No error message found, proceeding with verification
+2025-06-25 12:08:11,049 - INFO - Saved screenshot after login attempt
+2025-06-25 12:08:11,232 - INFO - Clicked 'Send Security Code' button
+2025-06-25 12:08:16,285 - INFO - Retrieving OTP from Gmail...
+2025-06-25 12:08:18,503 - INFO - Retrieved OTP: 396501
+2025-06-25 12:08:20,449 - INFO - Submitted OTP
+2025-06-25 12:08:30,463 - INFO - Page title after login: SalesJourney360
+2025-06-25 12:08:31,761 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-25 12:08:36,787 - INFO - Billing page title: SalesJourney360
+2025-06-25 12:08:37,158 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-25 12:08:42,179 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-25 12:08:42,182 - INFO - Retrieved start date from file: 2025-04-16 10:16:18
+2025-06-25 12:08:42,183 - ERROR - An error occurred: 'str' object has no attribute 'strftime'
+2025-06-25 12:08:42,191 - INFO - Browser remains open for manual inspection
+2025-06-25 12:09:02,114 - INFO - ====== WebDriver manager ======
+2025-06-25 12:09:03,523 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 12:09:03,591 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 12:09:03,647 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 12:09:08,376 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 12:09:13,570 - INFO - No cookie popup found
+2025-06-25 12:09:13,719 - INFO - Saved screenshot before login attempt
+2025-06-25 12:09:16,272 - INFO - Entered email
+2025-06-25 12:09:17,470 - INFO - Entered password
+2025-06-25 12:09:18,471 - INFO - Saved screenshot before clicking sign in
+2025-06-25 12:09:19,720 - INFO - Clicked 'Sign in' button
+2025-06-25 12:09:24,978 - INFO - No error message found, proceeding with verification
+2025-06-25 12:09:24,978 - INFO - Saved screenshot after login attempt
+2025-06-25 12:09:25,163 - INFO - Clicked 'Send Security Code' button
+2025-06-25 12:09:30,209 - INFO - Retrieving OTP from Gmail...
+2025-06-25 12:09:32,833 - INFO - Retrieved OTP: 851127
+2025-06-25 12:09:34,450 - INFO - Submitted OTP
+2025-06-25 12:09:44,464 - INFO - Page title after login: SalesJourney360
+2025-06-25 12:09:45,917 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-25 12:09:50,941 - INFO - Billing page title: SalesJourney360
+2025-06-25 12:09:51,280 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-25 12:09:56,289 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-25 12:09:56,290 - INFO - Retrieved start date from file: 2025-04-16 10:16:18
+2025-06-25 12:09:56,291 - INFO - Using start date-time: 2025-04-16 10:16:18, end date-time: 2025-06-25 12:09:56
+2025-06-25 12:09:56,390 - INFO - Advanced Filters button found: displayed=True, enabled=True
+2025-06-25 12:09:56,755 - INFO - Clicked Advanced Filters button
+2025-06-25 12:09:58,812 - INFO - Start date-time input found: displayed=True, enabled=True
+2025-06-25 12:09:58,872 - INFO - Start date-time input attributes: {'value': '2025-06-18 12:09:51', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 12:09:59,247 - INFO - Clicked start date-time input
+2025-06-25 12:09:59,273 - INFO - Start date-time input initial value: 2025-06-18 12:09:51
+2025-06-25 12:09:59,802 - INFO - JavaScript clear succeeded for Start date-time input
+2025-06-25 12:10:00,525 - INFO - Verified start date-time: 2025-04-16 10:16:18
+2025-06-25 12:10:05,673 - INFO - Clicked 'Confirm' button for start date-time
+2025-06-25 12:10:05,832 - INFO - End date-time input found: displayed=True, enabled=True
+2025-06-25 12:10:05,899 - INFO - End date-time input attributes: {'value': '2025-06-25 12:09:51', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 12:10:06,247 - INFO - Clicked end date-time input
+2025-06-25 12:10:06,264 - INFO - End date-time input initial value: 2025-06-25 12:09:51
+2025-06-25 12:10:06,794 - INFO - JavaScript clear succeeded for End date-time input
+2025-06-25 12:10:07,452 - INFO - Verified end date-time: 2025-06-25 12:09:56
+2025-06-25 12:10:12,588 - INFO - Clicked 'Confirm' button for end date-time
+2025-06-25 13:10:55,640 - INFO - Browser remains open for manual inspection
+2025-06-25 14:38:17,267 - INFO - ====== WebDriver manager ======
+2025-06-25 14:38:18,928 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 14:38:19,002 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 14:38:19,050 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 14:38:23,909 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 14:38:29,116 - INFO - No cookie popup found
+2025-06-25 14:38:29,199 - INFO - Saved screenshot before login attempt
+2025-06-25 14:38:31,721 - INFO - Entered email
+2025-06-25 14:38:32,916 - INFO - Entered password
+2025-06-25 14:38:33,917 - INFO - Saved screenshot before clicking sign in
+2025-06-25 14:38:35,167 - INFO - Clicked 'Sign in' button
+2025-06-25 14:38:40,375 - INFO - No error message found, proceeding with verification
+2025-06-25 14:38:40,377 - INFO - Saved screenshot after login attempt
+2025-06-25 14:38:40,588 - INFO - Clicked 'Send Security Code' button
+2025-06-25 14:38:45,637 - INFO - Retrieving OTP from Gmail...
+2025-06-25 14:38:47,993 - INFO - Retrieved OTP: 965481
+2025-06-25 14:38:49,542 - INFO - Submitted OTP
+2025-06-25 14:38:59,557 - INFO - Page title after login: SalesJourney360
+2025-06-25 14:39:00,855 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-25 14:39:05,882 - INFO - Billing page title: SalesJourney360
+2025-06-25 14:39:06,277 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-25 14:39:11,287 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-25 14:39:11,289 - INFO - Retrieved start date from file: 2025-04-16 10:16:18
+2025-06-25 14:39:11,290 - INFO - Using start date-time: 2025-04-16 10:16:18, end date-time: 2025-06-25 14:39:11
+2025-06-25 14:39:11,396 - INFO - Advanced Filters button found: displayed=True, enabled=True
+2025-06-25 14:39:11,754 - INFO - Clicked Advanced Filters button
+2025-06-25 14:39:13,817 - INFO - Start date-time input found: displayed=True, enabled=True
+2025-06-25 14:39:13,877 - INFO - Start date-time input attributes: {'value': '2025-06-18 14:39:06', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 14:39:14,266 - INFO - Clicked start date-time input
+2025-06-25 14:39:14,295 - INFO - Start date-time input initial value: 2025-06-18 14:39:06
+2025-06-25 14:39:14,825 - INFO - JavaScript clear succeeded for Start date-time input
+2025-06-25 14:39:15,529 - INFO - Verified start date-time: 2025-04-16 10:16:18
+2025-06-25 14:39:20,731 - INFO - Clicked 'Confirm' button for start date-time
+2025-06-25 14:39:20,841 - INFO - End date-time input found: displayed=True, enabled=True
+2025-06-25 14:39:20,919 - INFO - End date-time input attributes: {'value': '2025-06-25 14:39:06', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 14:39:21,284 - INFO - Clicked end date-time input
+2025-06-25 14:39:21,300 - INFO - End date-time input initial value: 2025-06-25 14:39:06
+2025-06-25 14:39:21,849 - INFO - JavaScript clear succeeded for End date-time input
+2025-06-25 14:39:22,503 - INFO - Verified end date-time: 2025-06-25 14:39:11
+2025-06-25 14:39:27,677 - INFO - Clicked 'Confirm' button for end date-time
+2025-06-25 14:39:27,811 - INFO - Apply button found: displayed=True, enabled=True
+2025-06-25 14:39:28,196 - INFO - Clicked 'Apply' button
+2025-06-25 14:40:16,318 - INFO - Browser remains open for manual inspection
+2025-06-25 14:40:25,116 - INFO - ====== WebDriver manager ======
+2025-06-25 14:40:26,452 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 14:40:26,510 - INFO - Get LATEST chromedriver version for google-chrome
+2025-06-25 14:40:26,567 - INFO - Driver [C:\Users\MNC Tech\.wdm\drivers\chromedriver\win64\137.0.7151.119\chromedriver-win32/chromedriver.exe] found in cache
+2025-06-25 14:40:30,864 - INFO - Successfully opened the website: https://app.salesjourney360.com
+2025-06-25 14:40:36,101 - INFO - No cookie popup found
+2025-06-25 14:40:36,193 - INFO - Saved screenshot before login attempt
+2025-06-25 14:40:38,779 - INFO - Entered email
+2025-06-25 14:40:40,017 - INFO - Entered password
+2025-06-25 14:40:41,019 - INFO - Saved screenshot before clicking sign in
+2025-06-25 14:40:42,273 - INFO - Clicked 'Sign in' button
+2025-06-25 14:40:47,513 - INFO - No error message found, proceeding with verification
+2025-06-25 14:40:47,514 - INFO - Saved screenshot after login attempt
+2025-06-25 14:40:47,690 - INFO - Clicked 'Send Security Code' button
+2025-06-25 14:40:52,742 - INFO - Retrieving OTP from Gmail...
+2025-06-25 14:40:54,850 - INFO - Retrieved OTP: 934553
+2025-06-25 14:40:56,522 - INFO - Submitted OTP
+2025-06-25 14:41:06,543 - INFO - Page title after login: SalesJourney360
+2025-06-25 14:41:08,161 - INFO - Navigated to billing page: https://app.salesjourney360.com/settings/billing?tab=wallet_transactions
+2025-06-25 14:41:13,183 - INFO - Billing page title: SalesJourney360
+2025-06-25 14:41:13,699 - INFO - Clicked 'Detailed Transactions' tab
+2025-06-25 14:41:18,711 - INFO - Page title after selecting tab: SalesJourney360
+2025-06-25 14:41:18,733 - INFO - Retrieved start date from file: 2025-06-25 10:16:18
+2025-06-25 14:41:18,734 - INFO - Using start date-time: 2025-06-25 10:16:18, end date-time: 2025-06-25 14:41:18
+2025-06-25 14:41:18,822 - INFO - Advanced Filters button found: displayed=True, enabled=True
+2025-06-25 14:41:19,170 - INFO - Clicked Advanced Filters button
+2025-06-25 14:41:21,239 - INFO - Start date-time input found: displayed=True, enabled=True
+2025-06-25 14:41:21,294 - INFO - Start date-time input attributes: {'value': '2025-06-18 14:41:13', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 14:41:21,668 - INFO - Clicked start date-time input
+2025-06-25 14:41:21,685 - INFO - Start date-time input initial value: 2025-06-18 14:41:13
+2025-06-25 14:41:22,224 - INFO - JavaScript clear succeeded for Start date-time input
+2025-06-25 14:41:22,919 - INFO - Verified start date-time: 2025-06-25 10:16:18
+2025-06-25 14:41:28,062 - INFO - Clicked 'Confirm' button for start date-time
+2025-06-25 14:41:28,142 - INFO - End date-time input found: displayed=True, enabled=True
+2025-06-25 14:41:28,197 - INFO - End date-time input attributes: {'value': '2025-06-25 14:41:13', 'readonly': None, 'disabled': None, 'class': 'n-input__input-el'}
+2025-06-25 14:41:28,579 - INFO - Clicked end date-time input
+2025-06-25 14:41:28,615 - INFO - End date-time input initial value: 2025-06-25 14:41:13
+2025-06-25 14:41:29,170 - INFO - JavaScript clear succeeded for End date-time input
+2025-06-25 14:41:29,796 - INFO - Verified end date-time: 2025-06-25 14:41:18
+2025-06-25 14:41:34,945 - INFO - Clicked 'Confirm' button for end date-time
+2025-06-25 14:41:35,038 - INFO - Apply button found: displayed=True, enabled=True
+2025-06-25 14:41:35,407 - INFO - Clicked 'Apply' button
+2025-06-25 14:42:37,408 - INFO - Browser remains open for manual inspection
