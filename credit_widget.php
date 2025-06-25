@@ -1,14 +1,7 @@
 <?php
-
 // Function to get the latest USD to RM exchange rate (placeholder)
 function getUsdToRmExchangeRate() {
-    // In a real application, use an API like ExchangeRate-API, Alpha Vantage, or others
-    // Example: $response = file_get_contents('https://api.exchangerate-api.com/v4/latest/USD');
-    // $data = json_decode($response, true);
-    // return $data['rates']['MYR'];
-    
-    // For now, return a sample rate (update with real API call)
-    return 4.35; // Sample USD to MYR rate as of recent data
+    return 4.35; 
 }
 
 // Function to get all CSV files from a directory
@@ -27,12 +20,58 @@ function getCsvFiles($directory) {
     return $csvFiles;
 }
 
+// Function to read credit limits from total_credits.csv
+function getCreditLimits($filePath) {
+    $creditLimits = [];
+    if (!file_exists($filePath)) {
+        echo "Credit limits file not found: $filePath<br>";
+        return $creditLimits;
+    }
+
+    $file = fopen($filePath, 'r');
+    if ($file === false) {
+        echo "Failed to open credit limits file: $filePath<br>";
+        return $creditLimits;
+    }
+
+    $header = fgetcsv($file);
+    if ($header === false) {
+        echo "Failed to read header from credit limits file: $filePath<br>";
+        fclose($file);
+        return $creditLimits;
+    }
+
+    $locationIdIndex = array_search('locationId', $header);
+    $totalCreditIndex = array_search('totalAmount', $header);
+
+    if ($locationIdIndex === false || $totalCreditIndex === false) {
+        echo "Required columns (locationId or totalAmount) not found in: $filePath<br>";
+        fclose($file);
+        return $creditLimits;
+    }
+
+    while (($row = fgetcsv($file)) !== false) {
+        if (empty($row[$locationIdIndex]) || !isset($row[$totalCreditIndex])) {
+            continue;
+        }
+        $locationId = trim($row[$locationIdIndex]);
+        $totalCredit = floatval($row[$totalCreditIndex]);
+        $creditLimits[$locationId] = $totalCredit;
+    }
+
+    fclose($file);
+    return $creditLimits;
+}
+
 // Function to process CSV files and gather location and type data
 function processCsvFiles($csvFiles) {
     $results = [];
     $exchangeRate = getUsdToRmExchangeRate(); // Get exchange rate
     
     foreach ($csvFiles as $filePath) {
+        if (basename($filePath) === 'total_credits.csv') {
+            continue; // Skip the credit limits file
+        }
         if (!file_exists($filePath)) {
             echo "File not found: $filePath<br>";
             continue;
@@ -103,7 +142,9 @@ function processCsvFiles($csvFiles) {
 
 // Process the CSV files
 $csvDirectory = __DIR__ . '/csv_files'; 
+$creditLimitsFile = __DIR__ . '/total_credits.csv'; // Path to total_credits.csv
 $csvFiles = getCsvFiles($csvDirectory);
+$creditLimits = getCreditLimits($creditLimitsFile); // Read credit limits
 $processedData = processCsvFiles($csvFiles);
 
 if (empty($processedData)) {
@@ -126,7 +167,6 @@ HTML;
 }
 
 // Prepare subaccount data
-$defaultTotalAmountRm = 2412; // Hardcoded total amount in RM
 $exchangeRate = getUsdToRmExchangeRate(); // Get exchange rate for calculations
 $subaccountData = [];
 $allSubaccounts = [
@@ -142,16 +182,19 @@ $allSubaccounts = [
 
 // Calculate totals for "All Subaccounts"
 $totalUsedRm = 0;
+$totalCreditAll = 0;
 foreach ($processedData as $locationId => $data) {
     $totalUsedRm += $data['totalAmount'];
+    // Use total credit from CSV if available, otherwise default to 1000 credits
+    $totalCredit = isset($creditLimits[$locationId]) ? $creditLimits[$locationId] : 1000;
+    $totalCreditAll += $totalCredit;
 }
-$totalAmountAllRm = $defaultTotalAmountRm * count($processedData); // Total for all subaccounts
 $allSubaccounts['usedAmount'] = $totalUsedRm;
-$allSubaccounts['totalAmount'] = $totalAmountAllRm;
-$allSubaccounts['remainingAmount'] = $totalAmountAllRm - $totalUsedRm;
-$allSubaccounts['totalCredit'] = $allSubaccounts['totalAmount'] * 2;
-$allSubaccounts['usedCredit'] = $allSubaccounts['usedAmount'] * 2;
-$allSubaccounts['remainingCredit'] = $allSubaccounts['remainingAmount'] * 2;
+$allSubaccounts['totalCredit'] = $totalCreditAll;
+$allSubaccounts['totalAmount'] = $totalCreditAll / 2;
+$allSubaccounts['remainingAmount'] = $allSubaccounts['totalAmount'] - $allSubaccounts['usedAmount'];
+$allSubaccounts['usedCredit'] = $allSubaccounts['usedAmount'] / 2;
+$allSubaccounts['remainingCredit'] = $allSubaccounts['totalCredit'] - $allSubaccounts['usedCredit'];
 $allSubaccounts['percent'] = $allSubaccounts['totalAmount'] > 0 ? min(100, round(($allSubaccounts['usedAmount'] / $allSubaccounts['totalAmount']) * 100)) : 0;
 $allSubaccounts['max'] = $allSubaccounts['totalAmount'];
 $subaccountData[''] = $allSubaccounts;
@@ -159,17 +202,21 @@ $subaccountData[''] = $allSubaccounts;
 // Calculate for individual subaccounts
 foreach ($processedData as $locationId => $data) {
     $usedAmountRm = $data['totalAmount']; // Already in RM from processCsvFiles
-    $totalAmountRm = $defaultTotalAmountRm;
+    // Use total credit from CSV if available, otherwise default to 1000 credits
+    $totalCredit = isset($creditLimits[$locationId]) ? $creditLimits[$locationId] : 0;
+    $totalAmountRm = $totalCredit / 2; // Total Amount = Total Credit * 2
     $remainingAmountRm = max(0, $totalAmountRm - $usedAmountRm);
+    $usedCredit = $usedAmountRm * 2;
+    $remainingCredit = $totalCredit - $usedCredit;
     $percentUsed = $totalAmountRm > 0 ? min(100, round(($usedAmountRm / $totalAmountRm) * 100)) : 0;
 
     $subaccountData[$locationId] = [
         'totalAmount' => $totalAmountRm,
         'usedAmount' => $usedAmountRm,
         'remainingAmount' => $remainingAmountRm,
-        'totalCredit' => $totalAmountRm * 2,
-        'usedCredit' => $usedAmountRm * 2,
-        'remainingCredit' => $remainingAmountRm * 2,
+        'totalCredit' => $totalCredit,
+        'usedCredit' => $usedCredit,
+        'remainingCredit' => $remainingCredit,
         'percent' => $percentUsed,
         'max' => $totalAmountRm,
         'name' => $data['locationName'],
@@ -854,7 +901,7 @@ HTML;
                                         <div class="ghl-type-status">${count} transaction${count !== 1 ? 's' : ''}</div>
                                     </div>
                                 </div>
-                                <div class="ghl-type-credits">${totalAmount} </div>
+                                <div class="ghl-type-credits">${totalAmount}</div>
                             </div>
                         `;
                         typesGrid.insertAdjacentHTML('beforeend', typeElement);
