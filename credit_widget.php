@@ -21,11 +21,6 @@ HTML;
     exit;
 }
 
-// Function to get the latest USD to RM exchange rate (placeholder)
-function getUsdToRmExchangeRate() {
-    return 4.35;
-}
-
 // Function to get all CSV files from a directory
 function getCsvFiles($directory) {
     $csvFiles = [];
@@ -85,7 +80,6 @@ function getCreditLimits($filePath, $targetLocationId = null) {
 // Function to process CSV files and gather location, type, and monthly data
 function processCsvFiles($csvFiles, $targetLocationId = null) {
     $results = [];
-    $exchangeRate = getUsdToRmExchangeRate();
     foreach ($csvFiles as $filePath) {
         if (basename($filePath) === 'total_credits.csv') {
             continue;
@@ -123,10 +117,14 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
             if ($targetLocationId !== null && $locationId !== $targetLocationId) {
                 continue;
             }
-            $locationName = isset($locationNameIndex) && !empty($row[$locationNameIndex]) ? trim($row[$locationNameIndex]) : $locationId;
             $type = trim($row[$typeIndex]);
-            $amountUsd = floatval($row[$amountIndex]);
-            $amountRm = $amountUsd * $exchangeRate;
+            // Only process types exactly "Emails" or containing "WhatsApp"
+            if (strcasecmp($type, 'Emails') !== 0 && stripos($type, 'WhatsApp') === false) {
+                continue;
+            }
+            $locationName = isset($locationNameIndex) && !empty($row[$locationNameIndex]) ? trim($row[$locationNameIndex]) : $locationId;
+            // Set fixed amounts: 0.50 RM for WhatsApp, 0.005 RM for Emails
+            $amountRm = stripos($type, 'WhatsApp') !== false ? 0.50 : 0.005;
             if (!isset($results[$locationId])) {
                 $results[$locationId] = [
                     'locationName' => $locationName,
@@ -210,7 +208,6 @@ HTML;
 }
 
 // Prepare subaccount data
-$exchangeRate = getUsdToRmExchangeRate();
 $subaccountData = [];
 $allSubaccounts = [
     'totalAmount' => 0,
@@ -743,7 +740,7 @@ HTML;
         border-radius: 16px;
         max-width: 600px;
         width: 90%;
-        max-height: 80vh;
+        max-height: 50vh;
         overflow-y: auto;
         padding: 24px;
         box-shadow: var(--ghl-card-shadow);
@@ -898,15 +895,15 @@ HTML;
             </div>
             <div class="ghl-credit-summary <?php echo !$isDemo ? 'visible' : ''; ?>">
                 <div class="ghl-credit-total">
-                    <div id="subaccountCreditTotal" class="ghl-credit-number"><?php echo number_format($initialData['totalCredit']); ?></div>
+                    <div id="subaccountCreditTotal" class="ghl-credit-number"><?php echo number_format($initialData['totalCredit'], 2); ?></div>
                     <div class="ghl-credit-label">Total Credit</div>
                 </div>
                 <div class="ghl-credit-total">
-                    <div id="subaccountCreditUsed" class="ghl-credit-number"><?php echo number_format($initialData['usedCredit']); ?></div>
+                    <div id="subaccountCreditUsed" class="ghl-credit-number"><?php echo number_format($initialData['usedCredit'], 2); ?></div>
                     <div class="ghl-credit-label">Used Credit</div>
                 </div>
                 <div class="ghl-credit-total">
-                    <div id="subaccountCreditRemaining" class="ghl-credit-number"><?php echo number_format($initialData['remainingCredit']); ?></div>
+                    <div id="subaccountCreditRemaining" class="ghl-credit-number"><?php echo number_format($initialData['remainingCredit'], 2); ?></div>
                     <div class="ghl-credit-label">Remaining Credit</div>
                 </div>
             </div>
@@ -932,7 +929,7 @@ HTML;
                     <?php if (!$isDemo): ?>
                     <?php
                     $typeIcons = [
-                        '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+                        '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>',
                         '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>',
                         '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
                     ];
@@ -1046,7 +1043,6 @@ HTML;
             const typesGrid = document.getElementById('typesGrid');
             const monthlySection = document.getElementById('monthlySection');
             const monthlySelect = document.getElementById('monthlySelect');
-            const monthlyTypesGrid = document.getElementById('monthlyTypesGrid');
             const transactionsModal = document.getElementById('transactionsModal');
             const modalClose = document.getElementById('modalClose');
             const modalTitle = document.getElementById('modalTitle');
@@ -1066,7 +1062,7 @@ HTML;
             const errorMessage = document.getElementById('errorMessage');
             const subaccountData = <?php echo $subaccountDataJson; ?>;
             const typeIcons = [
-                '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+                '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>',
                 '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>',
                 '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
             ];
@@ -1090,9 +1086,9 @@ HTML;
                     subaccountAmountTotal.textContent = data.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     subaccountAmountUsed.textContent = data.usedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     subaccountAmountRemaining.textContent = data.remainingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    subaccountCreditTotal.textContent = data.totalCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                    subaccountCreditUsed.textContent = data.usedCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                    subaccountCreditRemaining.textContent = data.remainingCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    subaccountCreditTotal.textContent = data.totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    subaccountCreditUsed.textContent = data.usedCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    subaccountCreditRemaining.textContent = data.remainingCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     progressFill.style.width = `${data.percent}%`;
                     progressPercent.textContent = `${data.percent}% Used`;
                     progressLabels[0].textContent = '0';
