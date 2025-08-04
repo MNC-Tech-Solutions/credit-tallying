@@ -82,7 +82,7 @@ function getCreditLimits($filePath, $targetLocationId = null) {
     return $creditLimits;
 }
 
-// Function to process CSV files and gather location and type data
+// Function to process CSV files and gather location, type, and monthly data
 function processCsvFiles($csvFiles, $targetLocationId = null) {
     $results = [];
     $exchangeRate = getUsdToRmExchangeRate();
@@ -109,6 +109,7 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
         $locationNameIndex = array_search('locationName', $header);
         $typeIndex = array_search('type', $header);
         $amountIndex = array_search('amount', $header);
+        $dateIndex = array_search('date', $header);
         if ($locationIdIndex === false || $amountIndex === false || $typeIndex === false) {
             error_log("Required columns (locationId, type, or amount) not found in: $filePath");
             fclose($file);
@@ -131,7 +132,8 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
                     'locationName' => $locationName,
                     'totalAmount' => 0,
                     'count' => 0,
-                    'types' => []
+                    'types' => [],
+                    'whatsappMonthly' => []
                 ];
             }
             if (!isset($results[$locationId]['types'][$type])) {
@@ -144,6 +146,34 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
             $results[$locationId]['count']++;
             $results[$locationId]['types'][$type]['totalAmount'] += $amountRm;
             $results[$locationId]['types'][$type]['count']++;
+            // Process monthly WhatsApp data for types containing "WhatsApp"
+            if (stripos($type, 'WhatsApp') !== false && $dateIndex !== false && !empty($row[$dateIndex])) {
+                $dateStr = preg_replace('/(st|nd|rd|th)/', '', $row[$dateIndex]);
+                $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($dateStr));
+                if ($date !== false) {
+                    $monthKey = $date->format('Y-m');
+                    if (!isset($results[$locationId]['whatsappMonthly'][$monthKey])) {
+                        $results[$locationId]['whatsappMonthly'][$monthKey] = [
+                            'types' => []
+                        ];
+                    }
+                    if (!isset($results[$locationId]['whatsappMonthly'][$monthKey]['types'][$type])) {
+                        $results[$locationId]['whatsappMonthly'][$monthKey]['types'][$type] = [
+                            'totalAmount' => 0,
+                            'count' => 0,
+                            'transactions' => []
+                        ];
+                    }
+                    $results[$locationId]['whatsappMonthly'][$monthKey]['types'][$type]['totalAmount'] += $amountRm;
+                    $results[$locationId]['whatsappMonthly'][$monthKey]['types'][$type]['count']++;
+                    $results[$locationId]['whatsappMonthly'][$monthKey]['types'][$type]['transactions'][] = [
+                        'date' => $row[$dateIndex],
+                        'amount' => $amountRm
+                    ];
+                } else {
+                    error_log("Invalid date format in $filePath: " . $row[$dateIndex]);
+                }
+            }
         }
         fclose($file);
     }
@@ -250,7 +280,8 @@ foreach ($processedData as $locationId => $data) {
         'percent' => $percentUsed,
         'max' => $totalAmountRm,
         'name' => $data['locationName'],
-        'types' => $data['types']
+        'types' => $data['types'],
+        'whatsappMonthly' => $data['whatsappMonthly']
     ];
 }
 $subaccountDataJson = json_encode($subaccountData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
@@ -491,16 +522,17 @@ HTML;
         color: var(--ghl-gray);
     }
     
-    .ghl-subaccount-select {
+    .ghl-subaccount-select, .ghl-monthly-select {
         width: 100%;
         max-width: 100%;
         padding: 18px 24px;
         border-radius: 14px;
         border: none;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.25));
+        background: #ff99cc;
         font-size: 16px;
-        font-weight: 600;
+        font-weight: 300;
         color: white;
+        margin-bottom: 15px;
         cursor: pointer;
         appearance: none;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23ffffff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
@@ -511,7 +543,6 @@ HTML;
         transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
         backdrop-filter: blur(6px);
         position: relative;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         z-index: 2;
         box-sizing: border-box;
     }
@@ -522,12 +553,12 @@ HTML;
         background: linear-gradient(135deg, rgba(255, 255, 252, 0.45), rgba(255, 255, 255, 0.35));
     }
     
-    .ghl-subaccount-select:focus {
+    .ghl-subaccount-select:focus, .ghl-monthly-select:focus {
         outline: none;
         box-shadow: 0 0 0 4px rgba(255, 153, 204, 0.3);
     }
     
-    .ghl-subaccount-select option {
+    .ghl-subaccount-select option, .ghl-monthly-select option {
         color: var(--ghl-dark);
         background: white;
         font-weight: 500;
@@ -626,13 +657,13 @@ HTML;
         border-radius: 8px;
     }
 
-    .ghl-types-grid {
+    .ghl-types-grid, .ghl-monthly-types-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 12px;
     }
 
-    .ghl-type {
+    .ghl-type, .ghl-monthly-type {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -640,14 +671,21 @@ HTML;
         border: 1px solid var(--ghl-border);
         border-radius: 8px;
         background: var(--ghl-light-gray);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .ghl-type-info {
+    .ghl-type:hover, .ghl-monthly-type:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(255, 153, 204, 0.2);
+    }
+
+    .ghl-type-info, .ghl-monthly-type-info {
         display: flex;
         align-items: center;
     }
 
-    .ghl-type-icon {
+    .ghl-type-icon, .ghl-monthly-type-icon {
         width: 36px;
         height: 36px;
         border-radius: 8px;
@@ -658,25 +696,97 @@ HTML;
         margin-right: 12px;
     }
 
-    .ghl-type-icon svg {
+    .ghl-type-icon svg, .ghl-monthly-type-icon svg {
         width: 18px;
         height: 18px;
         color: var(--ghl-primary);
     }
 
-    .ghl-type-name {
+    .ghl-type-name, .ghl-monthly-type-name {
         font-weight: 500;
         color: var(--ghl-dark);
         margin-bottom: 2px;
     }
 
-    .ghl-type-status {
+    .ghl-type-status, .ghl-monthly-type-status {
         font-size: 12px;
         color: var(--ghl-gray);
     }
 
-    .ghl-type-credits {
+    .ghl-type-credits, .ghl-monthly-type-credits {
         font-weight: 600;
+        color: var(--ghl-dark);
+    }
+
+    .ghl-monthly-section {
+        margin-bottom: 24px;
+        display: none;
+        padding: 10px;
+        border-radius: 8px;
+    }
+
+    .ghl-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .ghl-modal-content {
+        background: white;
+        border-radius: 16px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 24px;
+        box-shadow: var(--ghl-card-shadow);
+        position: relative;
+    }
+
+    .ghl-modal-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        cursor: pointer;
+        font-size: 24px;
+        color: var(--ghl-dark);
+    }
+
+    .ghl-modal-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--ghl-dark);
+        margin-bottom: 16px;
+    }
+
+    .ghl-transactions-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+    }
+
+    .ghl-transactions-table th,
+    .ghl-transactions-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--ghl-border);
+    }
+
+    .ghl-transactions-table th {
+        font-weight: 600;
+        color: var(--ghl-dark);
+        background: var(--ghl-light-gray);
+    }
+
+    .ghl-transactions-table td {
+        font-size: 14px;
         color: var(--ghl-dark);
     }
 
@@ -721,6 +831,14 @@ HTML;
 
     .ghl-types-section.visible {
         display: block;
+    }
+
+    .ghl-monthly-section.visible {
+        display: block;
+    }
+
+    .ghl-modal.visible {
+        display: flex;
     }
 
     .ghl-subaccounts-toggle.hidden,
@@ -844,6 +962,37 @@ HTML;
                     <?php endif; ?>
                 </div>
             </div>
+            <div id="monthlySection" class="ghl-monthly-section <?php echo $targetLocationId === 'rsdW1sEFWbzzULIapmdQ' && !$isDemo ? 'visible' : ''; ?>">
+                <div class="ghl-section-title">WhatsApp Transactions by Month</div>
+                <select id="monthlySelect" class="ghl-monthly-select">
+                    <option value="">Select a month</option>
+                    <?php if ($targetLocationId === 'rsdW1sEFWbzzULIapmdQ' && !$isDemo && isset($initialData['whatsappMonthly'])): ?>
+                    <?php
+                    ksort($initialData['whatsappMonthly']);
+                    foreach ($initialData['whatsappMonthly'] as $month => $monthData) {
+                        $monthName = DateTime::createFromFormat('Y-m', $month)->format('F Y');
+                        echo "<option value=\"{$month}\">{$monthName}</option>\n";
+                    }
+                    ?>
+                    <?php endif; ?>
+                </select>
+                <div id="monthlyTypesGrid" class="ghl-monthly-types-grid"></div>
+            </div>
+            <div id="transactionsModal" class="ghl-modal">
+                <div class="ghl-modal-content">
+                    <span id="modalClose" class="ghl-modal-close">&times;</span>
+                    <div id="modalTitle" class="ghl-modal-title"></div>
+                    <table id="transactionsTable" class="ghl-transactions-table">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Amount (RM)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
             <?php if ($isDemo): ?>
             <div id="subaccountsToggle" class="ghl-subaccounts-toggle">
                 <div class="ghl-section-title">Sub Accounts (<?php echo count($processedData); ?>)</div>
@@ -889,11 +1038,19 @@ HTML;
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const isDemo = <?php echo json_encode($isDemo); ?>;
+            const targetLocationId = '<?php echo $targetLocationId; ?>';
             const creditSummary = document.querySelector('.ghl-credit-summary');
             const amountSummary = document.querySelector('.ghl-amount-summary');
             const progressSection = document.querySelector('.ghl-progress-section');
             const typesSection = document.getElementById('typesSection');
             const typesGrid = document.getElementById('typesGrid');
+            const monthlySection = document.getElementById('monthlySection');
+            const monthlySelect = document.getElementById('monthlySelect');
+            const monthlyTypesGrid = document.getElementById('monthlyTypesGrid');
+            const transactionsModal = document.getElementById('transactionsModal');
+            const modalClose = document.getElementById('modalClose');
+            const modalTitle = document.getElementById('modalTitle');
+            const transactionsTableBody = document.getElementById('transactionsTableBody');
             const subaccountsToggle = document.getElementById('subaccountsToggle');
             const subaccountsContent = document.getElementById('subaccountsContent');
             const subaccountAmountTotal = document.getElementById('subaccountAmountTotal');
@@ -922,8 +1079,8 @@ HTML;
                 creditSummary.classList.toggle('visible', !!data);
                 amountSummary.classList.toggle('visible', !!data);
                 progressSection.classList.toggle('visible', !!data);
-                // Show types section only for specific subaccounts (not 'All Subaccounts')
                 typesSection.classList.toggle('visible', !!data && (isDemo ? selected !== '' : true));
+                monthlySection.classList.toggle('visible', !!data && !isDemo && selected === 'rsdW1sEFWbzzULIapmdQ');
                 if (isDemo) {
                     subaccountsToggle.classList.toggle('hidden', selected !== '');
                     subaccountsContent.classList.toggle('hidden', selected !== '');
@@ -974,9 +1131,106 @@ HTML;
                     } else {
                         console.log('Types section hidden for All Subaccounts');
                     }
+                    monthlyTypesGrid.innerHTML = '';
+                    monthlySelect.value = '';
                 } else {
                     errorMessage.textContent = 'No data available for the selected subaccount.';
                 }
+            }
+
+            function showModal(type, month, transactions) {
+                console.log(`Showing modal for type: ${type}, month: ${month}`);
+                modalTitle.textContent = `${type} Transactions - ${new Date(`${month}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })}`;
+                transactionsTableBody.innerHTML = '';
+                transactions.forEach(transaction => {
+                    const dateStr = transaction.date.replace(/(st|nd|rd|th)/, '');
+                    const formattedDate = new Date(dateStr).toLocaleString('en-US', {
+                        month: 'short',
+                        day: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: true
+                    });
+                    const amount = transaction.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    const row = `
+                        <tr>
+                            <td>${formattedDate}</td>
+                            <td>${amount}</td>
+                        </tr>
+                    `;
+                    transactionsTableBody.insertAdjacentHTML('beforeend', row);
+                });
+                transactionsModal.classList.add('visible');
+            }
+
+            if (!isDemo && monthlySelect && targetLocationId === 'rsdW1sEFWbzzULIapmdQ') {
+                monthlySelect.addEventListener('change', function(e) {
+                    const selectedMonth = this.value;
+                    console.log('Selected month:', selectedMonth);
+                    monthlyTypesGrid.innerHTML = '';
+                    if (selectedMonth && subaccountData[targetLocationId].whatsappMonthly[selectedMonth]) {
+                        console.log('Rendering WhatsApp types for month:', selectedMonth);
+                        let iconIndex = 0;
+                        for (const [type, typeData] of Object.entries(subaccountData[targetLocationId].whatsappMonthly[selectedMonth].types || {})) {
+                            const totalAmount = typeData.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            const count = typeData.count;
+                            const plural = count !== 1 ? 's' : '';
+                            const icon = typeIcons[iconIndex % typeIcons.length];
+                            iconIndex++;
+                            const typeElement = document.createElement('div');
+                            typeElement.className = 'ghl-monthly-type';
+                            typeElement.innerHTML = `
+                                <div class="ghl-monthly-type-info">
+                                    <div class="ghl-monthly-type-icon">
+                                        ${icon}
+                                    </div>
+                                    <div>
+                                        <div class="ghl-monthly-type-name">${type}</div>
+                                        <div class="ghl-monthly-type-status">${count} transaction${plural}</div>
+                                    </div>
+                                </div>
+                                <div class="ghl-monthly-type-credits">${totalAmount}</div>
+                            `;
+                            typeElement.addEventListener('click', () => {
+                                showModal(type, selectedMonth, typeData.transactions);
+                            });
+                            monthlyTypesGrid.appendChild(typeElement);
+                        }
+                        const rect = this.getBoundingClientRect();
+                        const x = rect.width / 2;
+                        const y = rect.height / 2;
+                        const colors = ['#ffffff', '#fff0f5', '#ffc1e0', '#ff99cc'];
+                        for (let i = 0; i < 15; i++) {
+                            const sparkle = document.createElement('div');
+                            sparkle.className = 'sparkle';
+                            const angle = Math.random() * Math.PI * 2;
+                            const distance = 40 + Math.random() * 40;
+                            const size = 5 + Math.random() * 8;
+                            const color = colors[Math.floor(Math.random() * colors.length)];
+                            sparkle.style.left = `${x}px`;
+                            sparkle.style.top = `${y}px`;
+                            sparkle.style.setProperty('--size', `${size}px`);
+                            sparkle.style.setProperty('--color', color);
+                            sparkle.style.setProperty('--tx', `${Math.cos(angle) * distance}px`);
+                            sparkle.style.setProperty('--ty', `${Math.sin(angle) * distance}px`);
+                            sparkle.style.animationDelay = `${i * 0.05}s`;
+                            this.appendChild(sparkle);
+                            setTimeout(() => {
+                                sparkle.remove();
+                            }, 1000);
+                        }
+                    }
+                });
+                modalClose.addEventListener('click', () => {
+                    transactionsModal.classList.remove('visible');
+                });
+                transactionsModal.addEventListener('click', (e) => {
+                    if (e.target === transactionsModal) {
+                        transactionsModal.classList.remove('visible');
+                    }
+                });
             }
 
             if (isDemo && subaccountSelect) {
