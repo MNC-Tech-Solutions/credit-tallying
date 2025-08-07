@@ -391,7 +391,7 @@ HTML;
     
     .ghl-dashboard {
         width: 100%;
-        max-width: 1000px;
+        max-width: 1200px;
         background: white;
         border-radius: 16px;
         box-shadow: var(--ghl-card-shadow);
