@@ -339,7 +339,7 @@ sort($allMonths);
     <div class="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden ghl-animate">
         <div class="p-6 border-b border-gray-200">
             <div class="flex justify-between items-center mb-4">
-                <h1 class="text-3xl font-bold text-gray-800">Credits Dashboard</h1>
+                <h1 class="text-3xl font-bold text-gray-800">Workflow Premium Actions Dashboard</h1>
                 <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-6 h-6 text-gray-600">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -382,20 +382,7 @@ HTML;
                     ?>
                 </div>
             </div>
-            <!-- Monthly Section -->
-            <div id="monthlySection" class="ghl-monthly-section <?php echo !empty($allMonths) ? 'visible' : ''; ?>">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Transactions by Month</h2>
-                <select id="monthlySelect" class="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 ghl-animate">
-                    <option value="">Select a month</option>
-                    <?php
-                    foreach ($allMonths as $month) {
-                        $monthName = DateTime::createFromFormat('Y-m', $month)->format('F Y');
-                        echo "<option value=\"{$month}\">{$monthName}</option>\n";
-                    }
-                    ?>
-                </select>
-                <div id="monthlyTypesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4"></div>
-            </div>
+            
             <!-- Subaccounts List -->
             <div id="subaccountsList" class="ghl-subaccounts-list">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Subaccounts (<?php echo count($processedData); ?>)</h2>
@@ -420,22 +407,37 @@ HTML;
                         $icon = $icons[$iconIndex % count($icons)];
                         $iconIndex++;
                         echo <<<HTML
-<div class="ghl-subaccount bg-white p-4 border border-gray-200 rounded-lg flex justify-between items-center ghl-animate">
-    <div class="flex items-center">
-        <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center mr-3">
-            {$icon}
-        </div>
-        <div>
-            <div class="font-medium text-gray-800">{$locationName}</div>
-            <div class="text-sm text-gray-500">{$status} • {$totalCount} transaction{$plural}</div>
-        </div>
-    </div>
-    <div class="font-semibold text-gray-800">{$totalAmountFormatted}</div>
-</div>
-HTML;
+                            <div class="ghl-subaccount bg-white p-4 border border-gray-200 rounded-lg flex justify-between items-center ghl-animate">
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center mr-3">
+                                        {$icon}
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-gray-800">{$locationName}</div>
+                                        <div class="text-sm text-gray-500">{$status} • {$totalCount} transaction{$plural}</div>
+                                    </div>
+                                </div>
+                                <div class="font-semibold text-gray-800">{$totalAmountFormatted}</div>
+                            </div>
+                            HTML;
                     }
                     ?>
                 </div>
+            </div>
+
+            <!-- Monthly Section -->
+            <div id="monthlySection" class="ghl-monthly-section <?php echo !empty($allMonths) ? 'visible' : ''; ?>">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Transactions by Month</h2>
+                <select id="monthlySelect" class="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 ghl-animate">
+                    <option value="">Select a month</option>
+                    <?php
+                    foreach ($allMonths as $month) {
+                        $monthName = DateTime::createFromFormat('Y-m', $month)->format('F Y');
+                        echo "<option value=\"{$month}\">{$monthName}</option>\n";
+                    }
+                    ?>
+                </select>
+                <div id="monthlyTypesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4"></div>
             </div>
         </div>
         <div id="transactionsModal" class="ghl-modal">
