@@ -82,7 +82,7 @@ function getCreditLimits($filePath, $targetLocationId = null) {
     return $creditLimits;
 }
 
-// Function to process CSV files and gather location, type, and monthly data
+// Function to process CSV files and gather location, type, and date range data
 function processCsvFiles($csvFiles, $targetLocationId = null) {
     $results = [];
     foreach ($csvFiles as $filePath) {
@@ -138,7 +138,7 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
                     'emailCount' => 0,
                     'whatsappCount' => 0,
                     'types' => [],
-                    'monthlyData' => []
+                    'transactionData' => []
                 ];
             }
             if (!isset($results[$locationId]['types'][$type])) {
@@ -156,31 +156,20 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
             }
             $results[$locationId]['types'][$type]['totalAmount'] += $amountRm;
             $results[$locationId]['types'][$type]['count']++;
-            // Process monthly WhatsApp and Email data
+            // Store transaction data
             if ($dateIndex !== false && !empty($row[$dateIndex])) {
                 $dateStr = preg_replace('/(st|nd|rd|th)/', '', $row[$dateIndex]);
                 $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($dateStr));
                 if ($date !== false) {
-                    $monthKey = $date->format('Y-m');
-                    if (!isset($results[$locationId]['monthlyData'][$monthKey])) {
-                        $results[$locationId]['monthlyData'][$monthKey] = [
-                            'types' => []
-                        ];
-                    }
+                    $dateKey = $date->format('Y-m-d H:i:s');
                     $monthlyType = strcasecmp($type, 'Emails') === 0 ? 'Emails' : 'WhatsApp';
-                    if (!isset($results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType])) {
-                        $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType] = [
-                            'totalAmount' => 0,
-                            'count' => 0,
-                            'transactions' => []
-                        ];
+                    if (!isset($results[$locationId]['transactionData'][$monthlyType])) {
+                        $results[$locationId]['transactionData'][$monthlyType] = [];
                     }
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['totalAmount'] += $amountRm;
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['count']++;
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['transactions'][] = [
+                    $results[$locationId]['transactionData'][$monthlyType][] = [
                         'date' => $row[$dateIndex],
                         'amount' => $amountRm,
-                        'originalType' => $type // Store original type for modal display
+                        'originalType' => $type
                     ];
                 } else {
                     error_log("Invalid date format in $filePath: " . $row[$dateIndex]);
@@ -273,14 +262,14 @@ if ($isDemo) {
     $allSubaccounts['emailUsedAmount'] = $totalEmailUsedRm;
     $allSubaccounts['whatsappUsedAmount'] = $totalWhatsappUsedRm;
     $allSubaccounts['whatsappCredit'] = $totalWhatsappCredit;
-    $allSubaccounts['whatsappAmount'] = $totalWhatsappCredit / 2; // 0.50 RM per WhatsApp credit
+    $allSubaccounts['whatsappAmount'] = $totalWhatsappCredit / 2;
     $allSubaccounts['whatsappRemainingAmount'] = max(0, $allSubaccounts['whatsappAmount'] - $allSubaccounts['whatsappUsedAmount']);
     $allSubaccounts['emailCredit'] = $totalEmailCredit;
-    $allSubaccounts['emailUsedCredit'] = $totalEmailUsedRm / 0.005; // Convert RM to credits (0.005 RM per Email)
-    $allSubaccounts['emailAmount'] = $totalEmailCredit * 0.005; // Total Email credits in RM
+    $allSubaccounts['emailUsedCredit'] = $totalEmailUsedRm / 0.005;
+    $allSubaccounts['emailAmount'] = $totalEmailCredit * 0.005;
     $allSubaccounts['emailRemainingCredit'] = max(0, $allSubaccounts['emailCredit'] - $allSubaccounts['emailUsedCredit']);
     $allSubaccounts['emailRemainingAmount'] = $allSubaccounts['emailRemainingCredit'] * 0.005;
-    $allSubaccounts['whatsappUsedCredit'] = $totalWhatsappUsedRm / 0.50; // Convert RM to credits (0.50 RM per WhatsApp credit)
+    $allSubaccounts['whatsappUsedCredit'] = $totalWhatsappUsedRm / 0.50;
     $allSubaccounts['whatsappRemainingCredit'] = $allSubaccounts['whatsappCredit'] - $allSubaccounts['whatsappUsedCredit'];
     $allSubaccounts['emailPercent'] = $allSubaccounts['emailAmount'] > 0 ? min(100, round($allSubaccounts['emailUsedAmount'] / $allSubaccounts['emailAmount'] * 100)) : 0;
     $allSubaccounts['whatsappPercent'] = $allSubaccounts['whatsappAmount'] > 0 ? min(100, round($allSubaccounts['whatsappUsedAmount'] / $allSubaccounts['whatsappAmount'] * 100)) : 0;
@@ -297,13 +286,13 @@ foreach ($processedData as $locationId => $data) {
     $whatsappUsedAmountRm = $data['whatsappAmount'];
     $whatsappCredit = isset($creditLimits[$locationId]['whatsappCredit']) ? $creditLimits[$locationId]['whatsappCredit'] : 0;
     $emailCredit = isset($creditLimits[$locationId]['emailCredit']) ? $creditLimits[$locationId]['emailCredit'] : 0;
-    $whatsappAmountRm = $whatsappCredit / 2; // 0.50 RM per WhatsApp credit
-    $emailAmountRm = $emailCredit * 0.005; // Convert credits to RM (0.005 RM per Email)
+    $whatsappAmountRm = $whatsappCredit / 2;
+    $emailAmountRm = $emailCredit * 0.005;
     $whatsappRemainingAmountRm = max(0, $whatsappAmountRm - $whatsappUsedAmountRm);
-    $emailUsedCredit = $emailUsedAmountRm / 0.005; // Convert RM to credits
+    $emailUsedCredit = $emailUsedAmountRm / 0.005;
     $emailRemainingCredit = max(0, $emailCredit - $emailUsedCredit);
     $emailRemainingAmountRm = $emailRemainingCredit * 0.005;
-    $whatsappUsedCredit = $whatsappUsedAmountRm / 0.50; // Convert RM to credits (0.50 RM per WhatsApp credit)
+    $whatsappUsedCredit = $whatsappUsedAmountRm / 0.50;
     $whatsappRemainingCredit = $whatsappCredit - $whatsappUsedCredit;
     $emailPercentUsed = $emailAmountRm > 0 ? min(100, round($emailUsedAmountRm / $emailAmountRm * 100)) : 0;
     $whatsappPercentUsed = $whatsappAmountRm > 0 ? min(100, round($whatsappUsedAmountRm / $whatsappAmountRm * 100)) : 0;
@@ -326,7 +315,7 @@ foreach ($processedData as $locationId => $data) {
         'whatsappMax' => $whatsappAmountRm,
         'name' => $data['locationName'],
         'types' => $data['types'],
-        'monthlyData' => $data['monthlyData']
+        'transactionData' => $data['transactionData']
     ];
 }
 $subaccountDataJson = json_encode($subaccountData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
@@ -361,10 +350,10 @@ HTML;
     <title>GHL Credits Dashboard</title>
     <style>
     :root {
-        --ghl-whatsapp: #25D366; /* Green */
-        --ghl-whatsapp-light: #4ADE80; /* Light green */
-        --ghl-email: #3B82F6; /* Blue */
-        --ghl-email-light: #60A5FA; /* Light blue */
+        --ghl-whatsapp: #25D366;
+        --ghl-whatsapp-light: #4ADE80;
+        --ghl-email: #3B82F6;
+        --ghl-email-light: #60A5FA;
         --ghl-dark: #2d3748;
         --ghl-gray: #718096;
         --ghl-light-gray: #f7fafc;
@@ -595,7 +584,7 @@ HTML;
         margin-top: 6px;
     }
     
-    .ghl-subaccount-select, .ghl-monthly-select {
+    .ghl-subaccount-select, .ghl-date-input {
         width: 100%;
         padding: 12px 16px;
         border-radius: 8px;
@@ -605,22 +594,23 @@ HTML;
         color: var(--ghl-dark);
         margin-bottom: 16px;
         cursor: pointer;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%232d3748'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 16px center;
-        background-size: 20px;
     }
     
-    .ghl-subaccount-select:focus, .ghl-monthly-select:focus {
+    .ghl-date-range {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+    }
+    
+    .ghl-date-range label {
+        font-size: 14px;
+        color: var(--ghl-dark);
+    }
+    
+    .ghl-subaccount-select:focus, .ghl-date-input:focus {
         outline: none;
         border-color: var(--ghl-whatsapp);
         box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.2);
-    }
-    
-    .ghl-subaccount-select option, .ghl-monthly-select option {
-        color: var(--ghl-dark);
-        background: white;
     }
     
     .ghl-subaccounts-toggle {
@@ -707,7 +697,7 @@ HTML;
     
     .ghl-types-section {
         margin-top: 24px;
-        display: none; /* Hidden to reduce clutter */
+        display: none;
     }
     
     .ghl-types-grid {
@@ -769,18 +759,18 @@ HTML;
         color: var(--ghl-dark);
     }
     
-    .ghl-monthly-section {
+    .ghl-date-section {
         margin-top: 24px;
         display: none;
     }
     
-    .ghl-monthly-types-grid {
+    .ghl-date-types-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 16px;
     }
     
-    .ghl-monthly-type {
+    .ghl-date-type {
         padding: 12px;
         border: 1px solid var(--ghl-border);
         border-radius: 8px;
@@ -791,16 +781,16 @@ HTML;
         cursor: pointer;
     }
     
-    .ghl-monthly-type:hover {
+    .ghl-date-type:hover {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
     
-    .ghl-monthly-type-info {
+    .ghl-date-type-info {
         display: flex;
         align-items: center;
     }
     
-    .ghl-monthly-type-icon {
+    .ghl-date-type-icon {
         width: 32px;
         height: 32px;
         border-radius: 6px;
@@ -811,24 +801,24 @@ HTML;
         margin-right: 12px;
     }
     
-    .ghl-monthly-type-icon svg {
+    .ghl-date-type-icon svg {
         width: 16px;
         height: 16px;
         color: var(--ghl-dark);
     }
     
-    .ghl-monthly-type-name {
+    .ghl-date-type-name {
         font-weight: 500;
         color: var(--ghl-dark);
         margin-bottom: 2px;
     }
     
-    .ghl-monthly-type-status {
+    .ghl-date-type-status {
         font-size: 12px;
         color: var(--ghl-gray);
     }
     
-    .ghl-monthly-type-credits {
+    .ghl-date-type-credits {
         font-weight: 600;
         color: var(--ghl-dark);
     }
@@ -901,12 +891,11 @@ HTML;
     .ghl-error-message {
         display: none;
         text-align: center;
-        padding: 16px;
+        padding: 0 16px;
         color: #e53e3e;
         font-weight: 500;
         background: white;
         border-radius: 8px;
-        margin-bottom: 16px;
     }
     
     .ghl-error-message.visible {
@@ -918,10 +907,10 @@ HTML;
     }
     
     .ghl-types-section.visible {
-        display: none; /* Keep hidden */
+        display: none;
     }
     
-    .ghl-monthly-section.visible {
+    .ghl-date-section.visible {
         display: block;
     }
     
@@ -952,6 +941,10 @@ HTML;
         .ghl-metric-value {
             font-size: 20px;
         }
+        .ghl-date-range {
+            flex-direction: column;
+            align-items: flex-start;
+        }
     }
     </style>
 </head>
@@ -977,7 +970,6 @@ HTML;
                 ?>
             </select>
             <?php endif; ?>
-            <div id="errorMessage" class="ghl-error-message"></div>
         </div>
         <div class="ghl-content">
             <!-- WhatsApp Card -->
@@ -1121,40 +1113,35 @@ HTML;
                         $icon = $typeIcons[$iconIndex % count($typeIcons)];
                         $iconIndex++;
                         echo <<<HTML
-<div class="ghl-type">
-    <div class="ghl-type-info">
-        <div class="ghl-type-icon">
-            {$icon}
-        </div>
-        <div>
-            <div class="ghl-type-name">{$type}</div>
-            <div class="ghl-type-status">{$count} transaction{$plural}</div>
-        </div>
-    </div>
-    <div class="ghl-type-credits">{$totalAmount}</div>
-</div>
-HTML;
+                        <div class="ghl-type">
+                            <div class="ghl-type-info">
+                                <div class="ghl-type-icon">
+                                    {$icon}
+                                </div>
+                                <div>
+                                    <div class="ghl-type-name">{$type}</div>
+                                    <div class="ghl-type-status">{$count} transaction{$plural}</div>
+                                </div>
+                            </div>
+                            <div class="ghl-type-credits">{$totalAmount}</div>
+                        </div>
+                        HTML;
                     }
                     ?>
                     <?php endif; ?>
                 </div>
             </div>
-            <!-- Monthly WhatsApp & Email Section -->
-            <div id="monthlySection" class="ghl-monthly-section <?php echo !$isDemo && !empty($initialData['monthlyData']) ? 'visible' : ''; ?>" style="grid-column: span 2;">
-                <div class="ghl-card-title">WhatsApp & Email Transactions by Month</div>
-                <select id="monthlySelect" class="ghl-monthly-select">
-                    <option value="">Select a month</option>
-                    <?php if (!$isDemo && !empty($initialData['monthlyData'])): ?>
-                    <?php
-                    ksort($initialData['monthlyData']);
-                    foreach ($initialData['monthlyData'] as $month => $monthData) {
-                        $monthName = DateTime::createFromFormat('Y-m', $month)->format('F Y');
-                        echo "<option value=\"{$month}\">{$monthName}</option>\n";
-                    }
-                    ?>
-                    <?php endif; ?>
-                </select>
-                <div id="monthlyTypesGrid" class="ghl-monthly-types-grid"></div>
+            <div id="errorMessage" class="ghl-error-message" style="grid-column: span 2;"></div>
+            <!-- Date Range WhatsApp & Email Section -->
+            <div id="dateSection" class="ghl-date-section <?php echo !$isDemo && !empty($initialData['transactionData']) ? 'visible' : ''; ?>" style="grid-column: span 2;">
+                <div class="ghl-card-title">WhatsApp & Email Transactions by Date Range</div>
+                <div class="ghl-date-range">
+                    <label for="startDate">Start Date:</label>
+                    <input type="date" id="startDate" class="ghl-date-input">
+                    <label for="endDate">End Date:</label>
+                    <input type="date" id="endDate" class="ghl-date-input">
+                </div>
+                <div id="dateTypesGrid" class="ghl-date-types-grid"></div>
             </div>
             <!-- Subaccounts Section -->
             <?php if ($isDemo): ?>
@@ -1244,9 +1231,10 @@ HTML;
             const emailProgressLabels = document.querySelectorAll('.ghl-progress-section.email .ghl-progress-labels div');
             const typesSection = document.getElementById('typesSection');
             const typesGrid = document.getElementById('typesGrid');
-            const monthlySection = document.getElementById('monthlySection');
-            const monthlySelect = document.getElementById('monthlySelect');
-            const monthlyTypesGrid = document.getElementById('monthlyTypesGrid');
+            const dateSection = document.getElementById('dateSection');
+            const startDateInput = document.getElementById('startDate');
+            const endDateInput = document.getElementById('endDate');
+            const dateTypesGrid = document.getElementById('dateTypesGrid');
             const transactionsModal = document.getElementById('transactionsModal');
             const modalClose = document.getElementById('modalClose');
             const modalTitle = document.getElementById('modalTitle');
@@ -1270,7 +1258,7 @@ HTML;
                 whatsappProgressSection.classList.toggle('visible', whatsappVisible);
                 emailProgressSection.classList.toggle('visible', emailVisible);
                 typesSection.classList.toggle('visible', !!data && (isDemo ? selected !== '' : false));
-                monthlySection.classList.toggle('visible', !!data && !isDemo && Object.keys(data.monthlyData || {}).length > 0);
+                dateSection.classList.toggle('visible', !!data && !isDemo && Object.keys(data.transactionData || {}).length > 0);
                 if (isDemo) {
                     subaccountsContent.classList.toggle('visible', selected === '');
                     subaccountsToggle.classList.toggle('visible', selected === '');
@@ -1330,26 +1318,18 @@ HTML;
                             typesGrid.insertAdjacentHTML('beforeend', typeElement);
                         }
                     }
-                    monthlyTypesGrid.innerHTML = '';
-                    monthlySelect.value = '';
-                    // Populate monthly select options dynamically
-                    if (!isDemo && data.monthlyData) {
-                        monthlySelect.innerHTML = '<option value="">Select a month</option>';
-                        Object.keys(data.monthlyData).sort().forEach(month => {
-                            const monthName = new Date(`${month}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' });
-                            const option = document.createElement('option');
-                            option.value = month;
-                            option.textContent = monthName;
-                            monthlySelect.appendChild(option);
-                        });
-                    }
+                    dateTypesGrid.innerHTML = '';
+                    startDateInput.value = '';
+                    endDateInput.value = '';
                 } else {
                     errorMessage.textContent = 'No data available for the selected subaccount.';
                 }
             }
 
-            function showModal(type, month, transactions) {
-                modalTitle.textContent = `${type} Transactions - ${new Date(`${month}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })}`;
+            function showModal(type, startDate, endDate, transactions) {
+                const startFormatted = startDate ? new Date(startDate).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Start';
+                const endFormatted = endDate ? new Date(endDate).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'End';
+                modalTitle.textContent = `${type} Transactions - ${startFormatted} to ${endFormatted}`;
                 transactionsTableBody.innerHTML = '';
                 transactions.forEach(transaction => {
                     const dateStr = transaction.date.replace(/(st|nd|rd|th)/, '');
@@ -1388,41 +1368,62 @@ HTML;
                 });
             });
 
-            if (!isDemo && monthlySelect) {
-                monthlySelect.addEventListener('change', function(e) {
-                    const selectedMonth = this.value;
+            if (!isDemo && startDateInput && endDateInput) {
+                function updateDateRange() {
+                    const startDate = startDateInput.value;
+                    const endDate = endDateInput.value;
                     const selected = subaccountSelect ? subaccountSelect.value : targetLocationId;
-                    monthlyTypesGrid.innerHTML = '';
-                    if (selectedMonth && subaccountData[selected].monthlyData[selectedMonth]) {
-                        const types = subaccountData[selected].monthlyData[selectedMonth].types || {};
-                        ['WhatsApp', 'Emails'].forEach(type => {
-                            if (types[type]) {
-                                const totalAmount = types[type].totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                const count = types[type].count;
+                    dateTypesGrid.innerHTML = '';
+                    if (startDate && endDate && new Date(startDate) <= new Date(endDate)) {
+                        const types = ['WhatsApp', 'Emails'];
+                        const filteredData = {};
+                        types.forEach(type => {
+                            const transactions = (subaccountData[selected].transactionData[type] || []).filter(transaction => {
+                                const dateStr = transaction.date.replace(/(st|nd|rd|th)/, '');
+                                const transactionDate = new Date(Date.parse(dateStr));
+                                return transactionDate >= new Date(startDate) && transactionDate <= new Date(endDate + 'T23:59:59');
+                            });
+                            if (transactions.length > 0) {
+                                filteredData[type] = {
+                                    totalAmount: transactions.reduce((sum, t) => sum + t.amount, 0),
+                                    count: transactions.length,
+                                    transactions
+                                };
+                            }
+                        });
+                        types.forEach(type => {
+                            if (filteredData[type]) {
+                                const totalAmount = filteredData[type].totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                const count = filteredData[type].count;
                                 const plural = count !== 1 ? 's' : '';
                                 const icon = typeIcons[type] || typeIcons['WhatsApp'];
                                 const typeElement = document.createElement('div');
-                                typeElement.className = 'ghl-monthly-type';
+                                typeElement.className = 'ghl-date-type';
                                 typeElement.innerHTML = `
-                                    <div class="ghl-monthly-type-info">
-                                        <div class="ghl-monthly-type-icon">
+                                    <div class="ghl-date-type-info">
+                                        <div class="ghl-date-type-icon">
                                             ${icon}
                                         </div>
                                         <div>
-                                            <div class="ghl-monthly-type-name">${type}</div>
-                                            <div class="ghl-monthly-type-status">${count} transaction${plural}</div>
+                                            <div class="ghl-date-type-name">${type}</div>
+                                            <div class="ghl-date-type-status">${count} transaction${plural}</div>
                                         </div>
                                     </div>
-                                    <div class="ghl-monthly-type-credits">${totalAmount}</div>
+                                    <div class="ghl-date-type-credits">${totalAmount}</div>
                                 `;
                                 typeElement.addEventListener('click', () => {
-                                    showModal(type, selectedMonth, types[type].transactions);
+                                    showModal(type, startDate, endDate, filteredData[type].transactions);
                                 });
-                                monthlyTypesGrid.appendChild(typeElement);
+                                dateTypesGrid.appendChild(typeElement);
                             }
                         });
+                    } else if (startDate || endDate) {
+                        errorMessage.textContent = 'Please select both start and end dates, and ensure start date is not after end date.';
+                        errorMessage.classList.add('visible');
                     }
-                });
+                }
+                startDateInput.addEventListener('change', updateDateRange);
+                endDateInput.addEventListener('change', updateDateRange);
                 modalClose.addEventListener('click', () => {
                     transactionsModal.classList.remove('visible');
                 });
