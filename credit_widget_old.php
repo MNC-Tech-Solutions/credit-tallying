@@ -1,5 +1,3 @@
-<!-- newest ver -->
-
 <?php
 // Get locationId from query parameter with validation
 $targetLocationId = isset($_GET['locationId']) ? trim($_GET['locationId']) : '';
@@ -57,37 +55,24 @@ function getCreditLimits($filePath, $targetLocationId = null) {
         fclose($file);
         return $creditLimits;
     }
-    
-    // Map different possible column names
-    $locationIdIndex = false;
-    $whatsappCreditIndex = false;
-    $emailCreditIndex = false;
-    
-    foreach ($header as $index => $column) {
-        $column = strtolower(trim($column));
-        if ($column === 'locationid' || $column === 'locationid') $locationIdIndex = $index;
-        if ($column === 'totalamount' || $column === 'whatsappcredits') $whatsappCreditIndex = $index;
-        if ($column === 'emailcredits') $emailCreditIndex = $index;
-    }
-    
-    if ($locationIdIndex === false) {
-        error_log("Required column (locationId) not found in: $filePath");
+    $locationIdIndex = array_search('locationId', $header);
+    $whatsappCreditIndex = array_search('totalAmount', $header);
+    $emailCreditIndex = array_search('emailCredits', $header);
+    if ($locationIdIndex === false || $whatsappCreditIndex === false || $emailCreditIndex === false) {
+        error_log("Required columns (locationId, totalAmount, or emailCredits) not found in: $filePath");
         fclose($file);
         return $creditLimits;
     }
-    
     while (($row = fgetcsv($file)) !== false) {
-        if (empty($row[$locationIdIndex])) {
+        if (empty($row[$locationIdIndex]) || !isset($row[$whatsappCreditIndex]) || !isset($row[$emailCreditIndex])) {
             continue;
         }
         $locationId = trim($row[$locationIdIndex]);
         if ($targetLocationId !== null && $locationId !== $targetLocationId) {
             continue;
         }
-        
-        $whatsappCredit = $whatsappCreditIndex !== false && isset($row[$whatsappCreditIndex]) ? floatval($row[$whatsappCreditIndex]) : 0;
-        $emailCredit = $emailCreditIndex !== false && isset($row[$emailCreditIndex]) ? floatval($row[$emailCreditIndex]) : 0;
-        
+        $whatsappCredit = floatval($row[$whatsappCreditIndex]);
+        $emailCredit = floatval($row[$emailCreditIndex]);
         $creditLimits[$locationId] = [
             'whatsappCredit' => $whatsappCredit,
             'emailCredit' => $emailCredit
@@ -119,31 +104,16 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
             fclose($file);
             continue;
         }
-        
-        // Map header columns - handle both old and new formats
-        $locationIdIndex = false;
-        $locationNameIndex = false;
-        $typeIndex = false;
-        $amountIndex = false;
-        $dateIndex = false;
-        $descriptionIndex = false;
-        
-        foreach ($header as $index => $column) {
-            $column = strtolower(trim($column));
-            if ($column === 'locationid' || $column === 'location id') $locationIdIndex = $index;
-            if ($column === 'locationname' || $column === 'location name') $locationNameIndex = $index;
-            if ($column === 'type' || $column === 'transaction type') $typeIndex = $index;
-            if ($column === 'amount') $amountIndex = $index;
-            if ($column === 'date' || $column === 'activity date') $dateIndex = $index;
-            if ($column === 'description') $descriptionIndex = $index;
-        }
-        
+        $locationIdIndex = array_search('locationId', $header);
+        $locationNameIndex = array_search('locationName', $header);
+        $typeIndex = array_search('type', $header);
+        $amountIndex = array_search('amount', $header);
+        $dateIndex = array_search('date', $header);
         if ($locationIdIndex === false || $amountIndex === false || $typeIndex === false) {
             error_log("Required columns (locationId, type, or amount) not found in: $filePath");
             fclose($file);
             continue;
         }
-        
         while (($row = fgetcsv($file)) !== false) {
             if (empty($row[$locationIdIndex]) || !isset($row[$amountIndex]) || empty($row[$typeIndex])) {
                 continue;
@@ -153,25 +123,13 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
                 continue;
             }
             $type = trim($row[$typeIndex]);
-            $amount = floatval($row[$amountIndex]);
-            
-            // Determine category based on type and description
-            $category = '';
-            $description = $descriptionIndex !== false && isset($row[$descriptionIndex]) ? strtolower(trim($row[$descriptionIndex])) : '';
-            
-            if (stripos($type, 'WhatsApp') !== false || stripos($description, 'whatsapp') !== false) {
-                $category = 'whatsapp';
-                $creditAmount = 0.50; // 0.50 RM per WhatsApp credit
-            } elseif (stripos($type, 'Email') !== false || stripos($description, 'email') !== false) {
-                $category = 'email';
-                $creditAmount = 0.005; // 0.005 RM per Email credit
-            } else {
-                // Skip transactions that don't match any category
+            // Only process types exactly "Emails" or containing "WhatsApp"
+            if (strcasecmp($type, 'Emails') !== 0 && stripos($type, 'WhatsApp') === false) {
                 continue;
             }
-            
-            $locationName = $locationNameIndex !== false && !empty($row[$locationNameIndex]) ? trim($row[$locationNameIndex]) : $locationId;
-            
+            $locationName = isset($locationNameIndex) && !empty($row[$locationNameIndex]) ? trim($row[$locationNameIndex]) : $locationId;
+            // Set fixed amounts: 0.50 RM for WhatsApp (1 credit), 0.005 RM for Emails (1 credit)
+            $amountRm = stripos($type, 'WhatsApp') !== false ? 0.50 : 0.005;
             if (!isset($results[$locationId])) {
                 $results[$locationId] = [
                     'locationName' => $locationName,
@@ -183,28 +141,22 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
                     'monthlyData' => []
                 ];
             }
-            
             if (!isset($results[$locationId]['types'][$type])) {
                 $results[$locationId]['types'][$type] = [
                     'totalAmount' => 0,
-                    'count' => 0,
-                    'category' => $category
+                    'count' => 0
                 ];
             }
-            
-            // Update category totals
-            if ($category === 'email') {
-                $results[$locationId]['emailAmount'] += $creditAmount;
+            if (strcasecmp($type, 'Emails') === 0) {
+                $results[$locationId]['emailAmount'] += $amountRm;
                 $results[$locationId]['emailCount']++;
-            } elseif ($category === 'whatsapp') {
-                $results[$locationId]['whatsappAmount'] += $creditAmount;
+            } else {
+                $results[$locationId]['whatsappAmount'] += $amountRm;
                 $results[$locationId]['whatsappCount']++;
             }
-            
-            $results[$locationId]['types'][$type]['totalAmount'] += $creditAmount;
+            $results[$locationId]['types'][$type]['totalAmount'] += $amountRm;
             $results[$locationId]['types'][$type]['count']++;
-            
-            // Process monthly data
+            // Process monthly WhatsApp and Email data
             if ($dateIndex !== false && !empty($row[$dateIndex])) {
                 $dateStr = preg_replace('/(st|nd|rd|th)/', '', $row[$dateIndex]);
                 $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($dateStr));
@@ -215,23 +167,20 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
                             'types' => []
                         ];
                     }
-                    
-                    $monthlyCategory = $category;
-                    if (!isset($results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyCategory])) {
-                        $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyCategory] = [
+                    $monthlyType = strcasecmp($type, 'Emails') === 0 ? 'Emails' : 'WhatsApp';
+                    if (!isset($results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType])) {
+                        $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType] = [
                             'totalAmount' => 0,
                             'count' => 0,
                             'transactions' => []
                         ];
                     }
-                    
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyCategory]['totalAmount'] += $creditAmount;
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyCategory]['count']++;
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyCategory]['transactions'][] = [
+                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['totalAmount'] += $amountRm;
+                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['count']++;
+                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['transactions'][] = [
                         'date' => $row[$dateIndex],
-                        'amount' => $creditAmount,
-                        'originalType' => $type,
-                        'description' => $descriptionIndex !== false && isset($row[$descriptionIndex]) ? $row[$descriptionIndex] : ''
+                        'amount' => $amountRm,
+                        'originalType' => $type // Store original type for modal display
                     ];
                 } else {
                     error_log("Invalid date format in $filePath: " . $row[$dateIndex]);
@@ -314,38 +263,30 @@ if ($isDemo) {
             if (!isset($allTypes[$type])) {
                 $allTypes[$type] = [
                     'totalAmount' => 0,
-                    'count' => 0,
-                    'category' => $typeData['category']
+                    'count' => 0
                 ];
             }
             $allTypes[$type]['totalAmount'] += $typeData['totalAmount'];
             $allTypes[$type]['count'] += $typeData['count'];
         }
     }
-    
     $allSubaccounts['emailUsedAmount'] = $totalEmailUsedRm;
     $allSubaccounts['whatsappUsedAmount'] = $totalWhatsappUsedRm;
-    
     $allSubaccounts['whatsappCredit'] = $totalWhatsappCredit;
     $allSubaccounts['whatsappAmount'] = $totalWhatsappCredit / 2; // 0.50 RM per WhatsApp credit
     $allSubaccounts['whatsappRemainingAmount'] = max(0, $allSubaccounts['whatsappAmount'] - $allSubaccounts['whatsappUsedAmount']);
-    
     $allSubaccounts['emailCredit'] = $totalEmailCredit;
     $allSubaccounts['emailUsedCredit'] = $totalEmailUsedRm / 0.005; // Convert RM to credits (0.005 RM per Email)
     $allSubaccounts['emailAmount'] = $totalEmailCredit * 0.005; // Total Email credits in RM
     $allSubaccounts['emailRemainingCredit'] = max(0, $allSubaccounts['emailCredit'] - $allSubaccounts['emailUsedCredit']);
     $allSubaccounts['emailRemainingAmount'] = $allSubaccounts['emailRemainingCredit'] * 0.005;
-    
     $allSubaccounts['whatsappUsedCredit'] = $totalWhatsappUsedRm / 0.50; // Convert RM to credits (0.50 RM per WhatsApp credit)
     $allSubaccounts['whatsappRemainingCredit'] = $allSubaccounts['whatsappCredit'] - $allSubaccounts['whatsappUsedCredit'];
-    
     $allSubaccounts['emailPercent'] = $allSubaccounts['emailAmount'] > 0 ? min(100, round($allSubaccounts['emailUsedAmount'] / $allSubaccounts['emailAmount'] * 100)) : 0;
     $allSubaccounts['whatsappPercent'] = $allSubaccounts['whatsappAmount'] > 0 ? min(100, round($allSubaccounts['whatsappUsedAmount'] / $allSubaccounts['whatsappAmount'] * 100)) : 0;
-    
     $allSubaccounts['emailMax'] = $allSubaccounts['emailAmount'];
     $allSubaccounts['whatsappMax'] = $allSubaccounts['whatsappAmount'];
     $allSubaccounts['types'] = $allTypes;
-    
     $subaccountData[''] = $allSubaccounts;
     error_log("All Subaccounts aggregated data (excluding Demo): " . json_encode($allSubaccounts));
 }
@@ -354,25 +295,18 @@ if ($isDemo) {
 foreach ($processedData as $locationId => $data) {
     $emailUsedAmountRm = $data['emailAmount'];
     $whatsappUsedAmountRm = $data['whatsappAmount'];
-    
     $whatsappCredit = isset($creditLimits[$locationId]['whatsappCredit']) ? $creditLimits[$locationId]['whatsappCredit'] : 0;
     $emailCredit = isset($creditLimits[$locationId]['emailCredit']) ? $creditLimits[$locationId]['emailCredit'] : 0;
-    
     $whatsappAmountRm = $whatsappCredit / 2; // 0.50 RM per WhatsApp credit
     $emailAmountRm = $emailCredit * 0.005; // Convert credits to RM (0.005 RM per Email)
-    
     $whatsappRemainingAmountRm = max(0, $whatsappAmountRm - $whatsappUsedAmountRm);
-    $emailRemainingAmountRm = max(0, $emailAmountRm - $emailUsedAmountRm);
-    
     $emailUsedCredit = $emailUsedAmountRm / 0.005; // Convert RM to credits
     $emailRemainingCredit = max(0, $emailCredit - $emailUsedCredit);
-    
+    $emailRemainingAmountRm = $emailRemainingCredit * 0.005;
     $whatsappUsedCredit = $whatsappUsedAmountRm / 0.50; // Convert RM to credits (0.50 RM per WhatsApp credit)
     $whatsappRemainingCredit = $whatsappCredit - $whatsappUsedCredit;
-    
     $emailPercentUsed = $emailAmountRm > 0 ? min(100, round($emailUsedAmountRm / $emailAmountRm * 100)) : 0;
     $whatsappPercentUsed = $whatsappAmountRm > 0 ? min(100, round($whatsappUsedAmountRm / $whatsappAmountRm * 100)) : 0;
-    
     $subaccountData[$locationId] = [
         'emailAmount' => $emailAmountRm,
         'whatsappAmount' => $whatsappAmountRm,
@@ -550,9 +484,6 @@ HTML;
     .ghl-tab.active {
         color: var(--ghl-dark);
         background: var(--ghl-tab-active);
-    }
-    
-    .ghl-tab.whatsapp.active {
         border-bottom: 2px solid var(--ghl-whatsapp);
     }
     
@@ -609,9 +540,6 @@ HTML;
     .ghl-progress-percent {
         font-size: 14px;
         font-weight: 600;
-    }
-    
-    .ghl-progress-percent.whatsapp {
         color: var(--ghl-whatsapp);
     }
     
@@ -779,7 +707,7 @@ HTML;
     
     .ghl-types-section {
         margin-top: 24px;
-        display: none;
+        display: none; /* Hidden to reduce clutter */
     }
     
     .ghl-types-grid {
@@ -990,7 +918,7 @@ HTML;
     }
     
     .ghl-types-section.visible {
-        display: none;
+        display: none; /* Keep hidden */
     }
     
     .ghl-monthly-section.visible {
@@ -1282,7 +1210,6 @@ HTML;
                             <th>Date & Time</th>
                             <th>Amount (RM)</th>
                             <th>Type</th>
-                            <th>Description</th>
                         </tr>
                     </thead>
                     <tbody id="transactionsTableBody"></tbody>
@@ -1295,75 +1222,87 @@ HTML;
         document.addEventListener('DOMContentLoaded', function() {
             const isDemo = <?php echo json_encode($isDemo); ?>;
             const targetLocationId = '<?php echo $targetLocationId; ?>';
+            const whatsappCreditTotal = document.getElementById('whatsappCreditTotal');
+            const whatsappCreditUsed = document.getElementById('whatsappCreditUsed');
+            const whatsappCreditRemaining = document.getElementById('whatsappCreditRemaining');
+            const whatsappAmountTotal = document.getElementById('whatsappAmountTotal');
+            const whatsappAmountUsed = document.getElementById('whatsappAmountUsed');
+            const whatsappAmountRemaining = document.getElementById('whatsappAmountRemaining');
+            const emailCreditTotal = document.getElementById('emailCreditTotal');
+            const emailCreditUsed = document.getElementById('emailCreditUsed');
+            const emailCreditRemaining = document.getElementById('emailCreditRemaining');
+            const emailAmountTotal = document.getElementById('emailAmountTotal');
+            const emailAmountUsed = document.getElementById('emailAmountUsed');
+            const emailAmountRemaining = document.getElementById('emailAmountRemaining');
+            const whatsappProgressSection = document.querySelector('.ghl-progress-section.whatsapp');
+            const emailProgressSection = document.querySelector('.ghl-progress-section.email');
+            const whatsappProgressFill = document.querySelector('.ghl-progress-fill.whatsapp');
+            const emailProgressFill = document.querySelector('.ghl-progress-fill.email');
+            const whatsappProgressPercent = document.querySelector('.ghl-progress-percent.whatsapp');
+            const emailProgressPercent = document.querySelector('.ghl-progress-percent.email');
+            const whatsappProgressLabels = document.querySelectorAll('.ghl-progress-section.whatsapp .ghl-progress-labels div');
+            const emailProgressLabels = document.querySelectorAll('.ghl-progress-section.email .ghl-progress-labels div');
+            const typesSection = document.getElementById('typesSection');
+            const typesGrid = document.getElementById('typesGrid');
+            const monthlySection = document.getElementById('monthlySection');
+            const monthlySelect = document.getElementById('monthlySelect');
+            const monthlyTypesGrid = document.getElementById('monthlyTypesGrid');
+            const transactionsModal = document.getElementById('transactionsModal');
+            const modalClose = document.getElementById('modalClose');
+            const modalTitle = document.getElementById('modalTitle');
+            const transactionsTableBody = document.getElementById('transactionsTableBody');
+            const subaccountsToggle = document.getElementById('subaccountsToggle');
+            const subaccountsContent = document.getElementById('subaccountsContent');
+            const subaccountSelect = document.getElementById('subaccountSelect');
+            const errorMessage = document.getElementById('errorMessage');
             const subaccountData = <?php echo $subaccountDataJson; ?>;
             const typeIcons = {
-                'whatsapp': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>',
-                'email': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>'
+                'Emails': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>',
+                'WhatsApp': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>'
             };
 
             function updateDashboard(selected) {
                 console.log('Updating dashboard for selection:', selected);
                 const data = subaccountData[selected];
-                const errorMessage = document.getElementById('errorMessage');
                 errorMessage.classList.toggle('visible', !data);
-                
                 const whatsappVisible = !!data && data.whatsappMax > 0;
                 const emailVisible = !!data && data.emailMax > 0;
-                
-                document.querySelector('.ghl-progress-section.whatsapp').classList.toggle('visible', whatsappVisible);
-                document.querySelector('.ghl-progress-section.email').classList.toggle('visible', emailVisible);
-                
-                document.getElementById('typesSection').classList.toggle('visible', !!data && (isDemo ? selected !== '' : false));
-                document.getElementById('monthlySection').classList.toggle('visible', !!data && !isDemo && Object.keys(data.monthlyData || {}).length > 0);
-                
+                whatsappProgressSection.classList.toggle('visible', whatsappVisible);
+                emailProgressSection.classList.toggle('visible', emailVisible);
+                typesSection.classList.toggle('visible', !!data && (isDemo ? selected !== '' : false));
+                monthlySection.classList.toggle('visible', !!data && !isDemo && Object.keys(data.monthlyData || {}).length > 0);
                 if (isDemo) {
-                    document.getElementById('subaccountsContent').classList.toggle('visible', selected === '');
-                    document.getElementById('subaccountsToggle').classList.toggle('visible', selected === '');
+                    subaccountsContent.classList.toggle('visible', selected === '');
+                    subaccountsToggle.classList.toggle('visible', selected === '');
                 }
-                
                 if (data) {
                     errorMessage.textContent = '';
-                    
-                    // Update WhatsApp metrics
-                    document.getElementById('whatsappCreditTotal').textContent = data.whatsappCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                    document.getElementById('whatsappCreditUsed').textContent = data.whatsappUsedCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                    document.getElementById('whatsappCreditRemaining').textContent = data.whatsappRemainingCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                    document.getElementById('whatsappAmountTotal').textContent = data.whatsappAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    document.getElementById('whatsappAmountUsed').textContent = data.whatsappUsedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    document.getElementById('whatsappAmountRemaining').textContent = data.whatsappRemainingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    
-                    // Update Email metrics
-                    document.getElementById('emailCreditTotal').textContent = data.emailCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                    document.getElementById('emailCreditUsed').textContent = data.emailUsedCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                    document.getElementById('emailCreditRemaining').textContent = data.emailRemainingCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                    document.getElementById('emailAmountTotal').textContent = data.emailAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    document.getElementById('emailAmountUsed').textContent = data.emailUsedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    document.getElementById('emailAmountRemaining').textContent = data.emailRemainingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    
-                    // Update progress bars
-                    const whatsappProgressFill = document.querySelector('.ghl-progress-fill.whatsapp');
-                    const emailProgressFill = document.querySelector('.ghl-progress-fill.email');
-                    
+                    whatsappCreditTotal.textContent = data.whatsappCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    whatsappCreditUsed.textContent = data.whatsappUsedCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    whatsappCreditRemaining.textContent = data.whatsappRemainingCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    whatsappAmountTotal.textContent = data.whatsappAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    whatsappAmountUsed.textContent = data.whatsappUsedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    whatsappAmountRemaining.textContent = data.whatsappRemainingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    emailCreditTotal.textContent = data.emailCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    emailCreditUsed.textContent = data.emailUsedCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    emailCreditRemaining.textContent = data.emailRemainingCredit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    emailAmountTotal.textContent = data.emailAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    emailAmountUsed.textContent = data.emailUsedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    emailAmountRemaining.textContent = data.emailRemainingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     whatsappProgressFill.style.width = `${data.whatsappPercent}%`;
                     emailProgressFill.style.width = `${data.emailPercent}%`;
-                    
-                    document.querySelector('.ghl-progress-percent.whatsapp').textContent = `${data.whatsappPercent}% Used`;
-                    document.querySelector('.ghl-progress-percent.email').textContent = `${data.emailPercent}% Used`;
-                    
-                    // Update progress labels
-                    const whatsappProgressLabels = document.querySelectorAll('.ghl-progress-section.whatsapp .ghl-progress-labels div');
-                    const emailProgressLabels = document.querySelectorAll('.ghl-progress-section.email .ghl-progress-labels div');
-                    
+                    whatsappProgressPercent.textContent = `${data.whatsappPercent}% Used`;
+                    emailProgressPercent.textContent = `${data.emailPercent}% Used`;
                     whatsappProgressLabels[0].textContent = '0';
                     whatsappProgressLabels[1].textContent = (Math.round(data.whatsappMax / 2)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     whatsappProgressLabels[2].textContent = data.whatsappMax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    
                     emailProgressLabels[0].textContent = '0';
                     emailProgressLabels[1].textContent = (Math.round(data.emailMax / 2)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     emailProgressLabels[2].textContent = data.emailMax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    
-                    // Update types grid
-                    const typesGrid = document.getElementById('typesGrid');
+                    setTimeout(() => {
+                        whatsappProgressFill.style.width = `${data.whatsappPercent}%`;
+                        emailProgressFill.style.width = `${data.emailPercent}%`;
+                    }, 300);
                     typesGrid.innerHTML = '';
                     if (isDemo ? selected !== '' : false) {
                         let iconIndex = 0;
@@ -1391,13 +1330,9 @@ HTML;
                             typesGrid.insertAdjacentHTML('beforeend', typeElement);
                         }
                     }
-                    
-                    // Update monthly section
-                    const monthlyTypesGrid = document.getElementById('monthlyTypesGrid');
                     monthlyTypesGrid.innerHTML = '';
-                    const monthlySelect = document.getElementById('monthlySelect');
                     monthlySelect.value = '';
-                    
+                    // Populate monthly select options dynamically
                     if (!isDemo && data.monthlyData) {
                         monthlySelect.innerHTML = '<option value="">Select a month</option>';
                         Object.keys(data.monthlyData).sort().forEach(month => {
@@ -1414,12 +1349,8 @@ HTML;
             }
 
             function showModal(type, month, transactions) {
-                const modalTitle = document.getElementById('modalTitle');
-                const transactionsTableBody = document.getElementById('transactionsTableBody');
-                
                 modalTitle.textContent = `${type} Transactions - ${new Date(`${month}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })}`;
                 transactionsTableBody.innerHTML = '';
-                
                 transactions.forEach(transaction => {
                     const dateStr = transaction.date.replace(/(st|nd|rd|th)/, '');
                     const formattedDate = new Date(dateStr).toLocaleString('en-US', {
@@ -1433,20 +1364,16 @@ HTML;
                     });
                     const amount = transaction.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     const originalType = transaction.originalType || type;
-                    const description = transaction.description || '';
-                    
                     const row = `
                         <tr>
                             <td>${formattedDate}</td>
                             <td>${amount}</td>
                             <td>${originalType}</td>
-                            <td>${description}</td>
                         </tr>
                     `;
                     transactionsTableBody.insertAdjacentHTML('beforeend', row);
                 });
-                
-                document.getElementById('transactionsModal').classList.add('visible');
+                transactionsModal.classList.add('visible');
             }
 
             // Tab switching
@@ -1461,25 +1388,19 @@ HTML;
                 });
             });
 
-            // Monthly select change handler
-            const monthlySelect = document.getElementById('monthlySelect');
             if (!isDemo && monthlySelect) {
                 monthlySelect.addEventListener('change', function(e) {
                     const selectedMonth = this.value;
-                    const selected = document.getElementById('subaccountSelect') ? document.getElementById('subaccountSelect').value : targetLocationId;
-                    const monthlyTypesGrid = document.getElementById('monthlyTypesGrid');
+                    const selected = subaccountSelect ? subaccountSelect.value : targetLocationId;
                     monthlyTypesGrid.innerHTML = '';
-                    
                     if (selectedMonth && subaccountData[selected].monthlyData[selectedMonth]) {
                         const types = subaccountData[selected].monthlyData[selectedMonth].types || {};
-                        ['whatsapp', 'email'].forEach(category => {
-                            if (types[category]) {
-                                const totalAmount = types[category].totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                const count = types[category].count;
+                        ['WhatsApp', 'Emails'].forEach(type => {
+                            if (types[type]) {
+                                const totalAmount = types[type].totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                const count = types[type].count;
                                 const plural = count !== 1 ? 's' : '';
-                                const displayName = category.charAt(0).toUpperCase() + category.slice(1);
-                                const icon = typeIcons[category] || typeIcons['whatsapp'];
-                                
+                                const icon = typeIcons[type] || typeIcons['WhatsApp'];
                                 const typeElement = document.createElement('div');
                                 typeElement.className = 'ghl-monthly-type';
                                 typeElement.innerHTML = `
@@ -1488,33 +1409,23 @@ HTML;
                                             ${icon}
                                         </div>
                                         <div>
-                                            <div class="ghl-monthly-type-name">${displayName}</div>
+                                            <div class="ghl-monthly-type-name">${type}</div>
                                             <div class="ghl-monthly-type-status">${count} transaction${plural}</div>
                                         </div>
                                     </div>
                                     <div class="ghl-monthly-type-credits">${totalAmount}</div>
                                 `;
                                 typeElement.addEventListener('click', () => {
-                                    showModal(displayName, selectedMonth, types[category].transactions);
+                                    showModal(type, selectedMonth, types[type].transactions);
                                 });
                                 monthlyTypesGrid.appendChild(typeElement);
                             }
                         });
                     }
                 });
-            }
-
-            // Modal handlers
-            const modalClose = document.getElementById('modalClose');
-            const transactionsModal = document.getElementById('transactionsModal');
-            
-            if (modalClose) {
                 modalClose.addEventListener('click', () => {
                     transactionsModal.classList.remove('visible');
                 });
-            }
-            
-            if (transactionsModal) {
                 transactionsModal.addEventListener('click', (e) => {
                     if (e.target === transactionsModal) {
                         transactionsModal.classList.remove('visible');
@@ -1522,8 +1433,6 @@ HTML;
                 });
             }
 
-            // Subaccount select handler
-            const subaccountSelect = document.getElementById('subaccountSelect');
             if (isDemo && subaccountSelect) {
                 subaccountSelect.addEventListener('change', function(e) {
                     const selected = this.value;
@@ -1531,13 +1440,10 @@ HTML;
                 });
             }
 
-            // Subaccounts toggle handler
-            const subaccountsToggle = document.getElementById('subaccountsToggle');
             if (subaccountsToggle) {
                 subaccountsToggle.addEventListener('click', () => {
-                    const subaccountsContent = document.getElementById('subaccountsContent');
-                    const toggleIcon = document.getElementById('toggleIcon');
                     subaccountsContent.classList.toggle('visible');
+                    const toggleIcon = document.getElementById('toggleIcon');
                     toggleIcon.classList.toggle('ghl-rotate');
                 });
             }
