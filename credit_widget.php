@@ -1282,7 +1282,6 @@ HTML;
                             <th>Date & Time</th>
                             <th>Amount (RM)</th>
                             <th>Type</th>
-                            <th>Description</th>
                         </tr>
                     </thead>
                     <tbody id="transactionsTableBody"></tbody>
@@ -1440,7 +1439,6 @@ HTML;
                             <td>${formattedDate}</td>
                             <td>${amount}</td>
                             <td>${originalType}</td>
-                            <td>${description}</td>
                         </tr>
                     `;
                     transactionsTableBody.insertAdjacentHTML('beforeend', row);
