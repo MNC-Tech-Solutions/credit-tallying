@@ -85,7 +85,22 @@ function getCreditLimits($filePath, $targetLocationId = null) {
     return $creditLimits;
 }
 
-// Function to process CSV files and gather location, type, and monthly data
+/* --------------------------------------------------------------
+   Helper: return the index of a column, trying several possible names
+   -------------------------------------------------------------- */
+function columnIndex($header, $possibleNames) {
+    foreach ($possibleNames as $name) {
+        $idx = array_search($name, $header);
+        if ($idx !== false) {
+            return $idx;
+        }
+    }
+    return false;
+}
+
+/* --------------------------------------------------------------
+   Updated CSV processor – supports BOTH old and new column names
+   -------------------------------------------------------------- */
 function processCsvFiles($csvFiles, $targetLocationId = null) {
     $results = [];
     foreach ($csvFiles as $filePath) {
@@ -107,75 +122,115 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
             fclose($file);
             continue;
         }
-        $locationIdIndex = array_search('locationId', $header);
-        $locationNameIndex = array_search('locationName', $header);
-        $typeIndex = array_search('type', $header);
-        $amountIndex = array_search('amount', $header);
-        $dateIndex = array_search('date', $header);
+
+        // ---- Column mapping (old name => [new name, old name]) ----
+        $idIndex          = columnIndex($header, ['Transaction ID', 'id']);
+        $locationIdIndex  = columnIndex($header, ['Location Id', 'locationId']);
+        $locationNameIdx  = columnIndex($header, ['Location Name', 'locationName']);
+        $typeIndex        = columnIndex($header, ['Transaction Type', 'type']);
+        $descIndex        = columnIndex($header, ['Description', 'description']);
+        $msgDateIndex     = columnIndex($header, ['Activity Date', 'messageDate']);
+        $dateIndex        = columnIndex($header, ['Date', 'date']);
+        $amountIndex      = columnIndex($header, ['Amount', 'amount']);
+        $balanceIndex     = columnIndex($header, ['Wallet Balance After Transaction', 'balance']);
+        $totalBalIdx      = columnIndex($header, ['Total Wallet Balance (Including Wallet Credits)', 'totalBalance']);
+        $creditsUsedIdx   = columnIndex($header, ['Credits Used', 'creditsUsed']);
+        $origAmtIdx       = columnIndex($header, ['Original Amount', 'originalAmount']);
+        $discAmtIdx       = columnIndex($header, ['Discount Applied', 'discountAmount']);
+
+        // Required columns – if any are missing we skip the file
         if ($locationIdIndex === false || $typeIndex === false) {
-            error_log("Required columns (locationId or type) not found in: $filePath");
+            error_log("Required columns (Location Id / Transaction Type) not found in: $filePath");
             fclose($file);
             continue;
         }
+
         while (($row = fgetcsv($file)) !== false) {
-            if (empty($row[$locationIdIndex]) || empty($row[$typeIndex])) {
+            // Guard against short rows
+            if (count($row) < max(
+                $locationIdIndex, $typeIndex, $dateIndex ?: 0, $amountIndex ?: 0
+            ) + 1) {
                 continue;
             }
+
             $locationId = trim($row[$locationIdIndex]);
             if ($targetLocationId !== null && $locationId !== $targetLocationId) {
                 continue;
             }
+
             $type = trim($row[$typeIndex]);
-            // Only process type exactly "Workflow - Premium Features"
+            // Only process "Workflow - Premium Features"
             if (strcasecmp($type, 'Workflow - Premium Features') !== 0) {
                 continue;
             }
-            $locationName = isset($locationNameIndex) && !empty($row[$locationNameIndex]) ? trim($row[$locationNameIndex]) : $locationId;
-            // Set amounts and count transactions
-            $amount = isset($row[$amountIndex]) ? floatval($row[$amountIndex]) : 1;
+
+            // ---- Optional / fallback fields ----
+            $locationName = ($locationNameIdx !== false && !empty($row[$locationNameIdx]))
+                ? trim($row[$locationNameIdx]) : $locationId;
+
+            $amount = ($amountIndex !== false) ? floatval($row[$amountIndex]) : 1;
+
+            // ---- Date handling (old: "date", new: "Date" or "Activity Date") ----
+            $dateStr = '';
+            if ($dateIndex !== false && !empty($row[$dateIndex])) {
+                $dateStr = $row[$dateIndex];
+            } elseif ($msgDateIndex !== false && !empty($row[$msgDateIndex])) {
+                $dateStr = $row[$msgDateIndex];
+            }
+
+            // -----------------------------------------------------------------
+            // Initialise result containers
+            // -----------------------------------------------------------------
             if (!isset($results[$locationId])) {
                 $results[$locationId] = [
                     'locationName' => $locationName,
-                    'types' => [],
-                    'monthlyData' => []
+                    'types'        => [],
+                    'monthlyData'  => []
                 ];
             }
             if (!isset($results[$locationId]['types'][$type])) {
                 $results[$locationId]['types'][$type] = [
                     'totalAmount' => 0,
-                    'count' => 0
+                    'count'       => 0
                 ];
             }
+
+            // ---- Accumulate totals for the type ----
             $results[$locationId]['types'][$type]['totalAmount'] += $amount;
-            $results[$locationId]['types'][$type]['count'] += 1; // Increment count for each transaction
-            // Process monthly data
-            if ($dateIndex !== false && !empty($row[$dateIndex])) {
-                $dateStr = preg_replace('/(st|nd|rd|th)/', '', $row[$dateIndex]);
-                $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($dateStr));
+            $results[$locationId]['types'][$type]['count']      += 1;
+
+            // ---- Monthly aggregation (if a date column exists) ----
+            if ($dateStr !== '') {
+                // Clean ordinal suffixes
+                $clean = preg_replace('/(st|nd|rd|th)/i', '', $dateStr);
+                $date  = DateTime::createFromFormat('M j Y, h:i:s A', trim($clean));
+                if ($date === false) {
+                    // Try a simpler format that sometimes appears
+                    $date = DateTime::createFromFormat('M j Y', trim($clean));
+                }
                 if ($date !== false) {
                     $monthKey = $date->format('Y-m');
                     if (!isset($results[$locationId]['monthlyData'][$monthKey])) {
-                        $results[$locationId]['monthlyData'][$monthKey] = [
-                            'types' => []
-                        ];
+                        $results[$locationId]['monthlyData'][$monthKey] = ['types' => []];
                     }
                     $monthlyType = 'Premium';
                     if (!isset($results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType])) {
                         $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType] = [
-                            'totalAmount' => 0,
-                            'count' => 0,
-                            'transactions' => []
+                            'totalAmount'   => 0,
+                            'count'         => 0,
+                            'transactions'  => []
                         ];
                     }
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['totalAmount'] += $amount;
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['count'] += 1;
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType]['transactions'][] = [
-                        'date' => $row[$dateIndex],
-                        'amount' => $amount,
-                        'originalType' => $type
+                    $monthly =& $results[$locationId]['monthlyData'][$monthKey]['types'][$monthlyType];
+                    $monthly['totalAmount'] += $amount;
+                    $monthly['count']       += 1;
+                    $monthly['transactions'][] = [
+                        'date'        => $dateStr,
+                        'amount'      => $amount,
+                        'originalType'=> $type
                     ];
                 } else {
-                    error_log("Invalid date format in $filePath: " . $row[$dateIndex]);
+                    error_log("Invalid date format in $filePath: $dateStr");
                 }
             }
         }
@@ -187,22 +242,26 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
     return $results;
 }
 
+// -----------------------------------------------------------------
 // Process the CSV files
-$csvDirectory = __DIR__ . '/csv_files';
+// -----------------------------------------------------------------
+$csvDirectory    = __DIR__ . '/csv_files';
 $creditLimitsFile = __DIR__ . '/total_credits.csv';
-$csvFiles = getCsvFiles($csvDirectory);
-$creditLimits = getCreditLimits($creditLimitsFile);
-$processedData = processCsvFiles($csvFiles);
+$csvFiles        = getCsvFiles($csvDirectory);
+$creditLimits    = getCreditLimits($creditLimitsFile);
+$processedData   = processCsvFiles($csvFiles);
 
+// -----------------------------------------------------------------
 // Prepare subaccount data
+// -----------------------------------------------------------------
 $subaccountData = [];
 $allSubaccounts = [
-    'types' => [],
+    'types'       => [],
     'monthlyData' => []
 ];
 
-// Calculate totals for "All Subaccounts" (excluding Demo subaccount)
-$allTypes = [];
+// ---- All Subaccounts (exclude Demo) ----
+$allTypes       = [];
 $allMonthlyData = [];
 foreach ($processedData as $locationId => $data) {
     if ($locationId === 'WphrMU0x3Ocd2pEpBJcH') {
@@ -211,13 +270,10 @@ foreach ($processedData as $locationId => $data) {
     }
     foreach ($data['types'] as $type => $typeData) {
         if (!isset($allTypes[$type])) {
-            $allTypes[$type] = [
-                'totalAmount' => 0,
-                'count' => 0
-            ];
+            $allTypes[$type] = ['totalAmount' => 0, 'count' => 0];
         }
         $allTypes[$type]['totalAmount'] += $typeData['totalAmount'];
-        $allTypes[$type]['count'] += $typeData['count'];
+        $allTypes[$type]['count']       += $typeData['count'];
     }
     foreach ($data['monthlyData'] as $month => $monthData) {
         if (!isset($allMonthlyData[$month])) {
@@ -226,13 +282,13 @@ foreach ($processedData as $locationId => $data) {
         foreach ($monthData['types'] as $monthlyType => $typeData) {
             if (!isset($allMonthlyData[$month]['types'][$monthlyType])) {
                 $allMonthlyData[$month]['types'][$monthlyType] = [
-                    'totalAmount' => 0,
-                    'count' => 0,
+                    'totalAmount'  => 0,
+                    'count'        => 0,
                     'transactions' => []
                 ];
             }
             $allMonthlyData[$month]['types'][$monthlyType]['totalAmount'] += $typeData['totalAmount'];
-            $allMonthlyData[$month]['types'][$monthlyType]['count'] += $typeData['count'];
+            $allMonthlyData[$month]['types'][$monthlyType]['count']       += $typeData['count'];
             $allMonthlyData[$month]['types'][$monthlyType]['transactions'] = array_merge(
                 $allMonthlyData[$month]['types'][$monthlyType]['transactions'],
                 $typeData['transactions']
@@ -240,22 +296,24 @@ foreach ($processedData as $locationId => $data) {
         }
     }
 }
-$allSubaccounts['types'] = $allTypes;
+$allSubaccounts['types']       = $allTypes;
 $allSubaccounts['monthlyData'] = $allMonthlyData;
-$subaccountData[''] = $allSubaccounts;
+$subaccountData['']            = $allSubaccounts;
 error_log("All Subaccounts aggregated data (excluding Demo): " . json_encode($allSubaccounts));
 
-// Calculate for individual subaccounts
+// ---- Individual subaccounts ----
 foreach ($processedData as $locationId => $data) {
     $subaccountData[$locationId] = [
-        'name' => $data['locationName'],
-        'types' => $data['types'],
+        'name'        => $data['locationName'],
+        'types'       => $data['types'],
         'monthlyData' => $data['monthlyData']
     ];
 }
 $subaccountDataJson = json_encode($subaccountData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 
+// -----------------------------------------------------------------
 // Determine initial data to display
+// -----------------------------------------------------------------
 $initialData = $allSubaccounts;
 if (empty($initialData['types']) && empty($initialData['monthlyData'])) {
     echo <<<HTML
@@ -277,11 +335,13 @@ HTML;
     exit;
 }
 
-// Collect all months across all subaccounts for the dropdown
+// -----------------------------------------------------------------
+// Collect all months for the dropdown (skip Demo)
+// -----------------------------------------------------------------
 $allMonths = [];
 foreach ($processedData as $locationId => $data) {
     if ($locationId === 'WphrMU0x3Ocd2pEpBJcH') {
-        continue; // Skip Demo subaccount
+        continue;
     }
     foreach (array_keys($data['monthlyData']) as $month) {
         $allMonths[$month] = true;
@@ -299,40 +359,12 @@ sort($allMonths);
     <title>GHL Credits Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .ghl-animate {
-            transition: all 0.3s ease;
-        }
-        .ghl-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        .ghl-modal.visible {
-            display: flex;
-        }
-        .ghl-types-section {
-            display: none;
-        }
-        .ghl-types-section.visible {
-            display: block;
-        }
-        .ghl-monthly-section {
-            display: none;
-        }
-        .ghl-monthly-section.visible {
-            display: block;
-        }
-        .ghl-subaccount:hover, .ghl-type:hover, .ghl-monthly-type:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-        }
+        .ghl-animate { transition: all 0.3s ease; }
+        .ghl-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
+        .ghl-modal.visible { display:flex; }
+        .ghl-types-section, .ghl-monthly-section { display:none; }
+        .ghl-types-section.visible, .ghl-monthly-section.visible { display:block; }
+        .ghl-subaccount:hover, .ghl-type:hover, .ghl-monthly-type:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body class="bg-gray-50 flex items-center justify-center min-h-screen p-4 font-sans">
@@ -348,6 +380,7 @@ sort($allMonths);
             </div>
             <div id="errorMessage" class="hidden text-center p-4 text-red-600 font-semibold bg-red-50 rounded-lg mt-4">No data available.</div>
         </div>
+
         <div class="p-6 grid gap-6">
             <!-- Types Section -->
             <div id="typesSection" class="ghl-types-section visible">
@@ -382,7 +415,7 @@ HTML;
                     ?>
                 </div>
             </div>
-            
+
             <!-- Subaccounts List -->
             <div id="subaccountsList" class="ghl-subaccounts-list">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Subaccounts (<?php echo count($processedData); ?>)</h2>
@@ -396,30 +429,30 @@ HTML;
                     $iconIndex = 0;
                     foreach ($processedData as $locationId => $data) {
                         if ($locationId === 'WphrMU0x3Ocd2pEpBJcH') {
-                            continue; // Skip Demo subaccount
+                            continue;
                         }
                         $locationName = htmlspecialchars($data['locationName']);
-                        $totalAmount = array_sum(array_map(function($typeData) { return $typeData['totalAmount']; }, $data['types']));
-                        $totalCount = array_sum(array_map(function($typeData) { return $typeData['count']; }, $data['types']));
+                        $totalAmount  = array_sum(array_map(fn($t) => $t['totalAmount'], $data['types']));
+                        $totalCount   = array_sum(array_map(fn($t) => $t['count'], $data['types']));
                         $totalAmountFormatted = number_format($totalAmount, 2);
                         $status = $totalAmount > 0 ? 'Active' : 'Inactive';
                         $plural = $totalCount !== 1 ? 's' : '';
-                        $icon = $icons[$iconIndex % count($icons)];
+                        $icon   = $icons[$iconIndex % count($icons)];
                         $iconIndex++;
                         echo <<<HTML
-                            <div class="ghl-subaccount bg-white p-4 border border-gray-200 rounded-lg flex justify-between items-center ghl-animate">
-                                <div class="flex items-center">
-                                    <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center mr-3">
-                                        {$icon}
-                                    </div>
-                                    <div>
-                                        <div class="font-medium text-gray-800">{$locationName}</div>
-                                        <div class="text-sm text-gray-500">{$status} • {$totalCount} transaction{$plural}</div>
-                                    </div>
-                                </div>
-                                <div class="font-semibold text-gray-800">{$totalAmountFormatted}</div>
-                            </div>
-                            HTML;
+<div class="ghl-subaccount bg-white p-4 border border-gray-200 rounded-lg flex justify-between items-center ghl-animate">
+    <div class="flex items-center">
+        <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center mr-3">
+            {$icon}
+        </div>
+        <div>
+            <div class="font-medium text-gray-800">{$locationName}</div>
+            <div class="text-sm text-gray-500">{$status} • {$totalCount} transaction{$plural}</div>
+        </div>
+    </div>
+    <div class="font-semibold text-gray-800">{$totalAmountFormatted}</div>
+</div>
+HTML;
                     }
                     ?>
                 </div>
@@ -440,6 +473,8 @@ HTML;
                 <div id="monthlyTypesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4"></div>
             </div>
         </div>
+
+        <!-- Transactions Modal -->
         <div id="transactionsModal" class="ghl-modal">
             <div class="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[50vh] overflow-y-auto shadow-2xl relative ghl-animate">
                 <span id="modalClose" class="absolute top-4 right-4 text-2xl text-gray-600 cursor-pointer hover:text-gray-800">&times;</span>
@@ -449,7 +484,7 @@ HTML;
                         <tr class="bg-gray-100">
                             <th class="p-3 text-left font-semibold text-gray-800">Date & Time</th>
                             <th class="p-3 text-left font-semibold text-gray-800">Amount</th>
-                            <th class="p-3 text-left font-semibold text-gray-800">Type</th>
+                            <th class="p-3 text-left font-semibold text837 text-gray-800">Type</th>
                         </tr>
                     </thead>
                     <tbody id="transactionsTableBody" class="text-gray-700"></tbody>
@@ -459,18 +494,18 @@ HTML;
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const typesSection = document.getElementById('typesSection');
-            const typesGrid = document.getElementById('typesGrid');
-            const monthlySection = document.getElementById('monthlySection');
-            const monthlySelect = document.getElementById('monthlySelect');
-            const monthlyTypesGrid = document.getElementById('monthlyTypesGrid');
-            const transactionsModal = document.getElementById('transactionsModal');
-            const modalClose = document.getElementById('modalClose');
-            const modalTitle = document.getElementById('modalTitle');
+        document.addEventListener('DOMContentLoaded', function () {
+            const typesSection       = document.getElementById('typesSection');
+            const typesGrid          = document.getElementById('typesGrid');
+            const monthlySection     = document.getElementById('monthlySection');
+            const monthlySelect      = document.getElementById('monthlySelect');
+            const monthlyTypesGrid   = document.getElementById('monthlyTypesGrid');
+            const transactionsModal  = document.getElementById('transactionsModal');
+            const modalClose         = document.getElementById('modalClose');
+            const modalTitle         = document.getElementById('modalTitle');
             const transactionsTableBody = document.getElementById('transactionsTableBody');
-            const errorMessage = document.getElementById('errorMessage');
-            const subaccountData = <?php echo $subaccountDataJson; ?>;
+            const errorMessage       = document.getElementById('errorMessage');
+            const subaccountData     = <?php echo $subaccountDataJson; ?>;
             const typeIcons = {
                 'Premium': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5 text-gray-600"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
             };
@@ -491,17 +526,15 @@ HTML;
                     let iconIndex = 0;
                     const typeIconsArray = Object.values(typeIcons);
                     for (const [type, typeData] of Object.entries(data.types || {})) {
-                        const totalAmount = typeData.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const totalAmount = typeData.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
                         const count = typeData.count;
                         const plural = count !== 1 ? 's' : '';
                         const icon = typeIconsArray[iconIndex % typeIconsArray.length];
                         iconIndex++;
-                        const typeElement = `
+                        typesGrid.insertAdjacentHTML('beforeend', `
                             <div class="ghl-type bg-white p-4 border border-gray-200 rounded-lg flex justify-between items-center ghl-animate">
                                 <div class="flex items-center">
-                                    <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center mr-3">
-                                        ${icon}
-                                    </div>
+                                    <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center mr-3">${icon}</div>
                                     <div>
                                         <div class="font-medium text-gray-800">${type}</div>
                                         <div class="text-sm text-gray-500">${count} transaction${plural}</div>
@@ -509,8 +542,7 @@ HTML;
                                 </div>
                                 <div class="font-semibold text-gray-800">${totalAmount}</div>
                             </div>
-                        `;
-                        typesGrid.insertAdjacentHTML('beforeend', typeElement);
+                        `);
                     }
                     monthlyTypesGrid.innerHTML = '';
                     monthlySelect.value = '';
@@ -520,84 +552,64 @@ HTML;
             }
 
             function showModal(subaccountName, type, month, transactions) {
-                modalTitle.textContent = `${type} Transactions - ${subaccountName} - ${new Date(`${month}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })}`;
+                modalTitle.textContent = `${type} Transactions - ${subaccountName} - ${new Date(`${month}-01`).toLocaleString('en-US', {month:'long', year:'numeric'})}`;
                 transactionsTableBody.innerHTML = '';
-                transactions.forEach(transaction => {
-                    const dateStr = transaction.date.replace(/(st|nd|rd|th)/, '');
-                    const formattedDate = new Date(dateStr).toLocaleString('en-US', {
-                        month: 'short',
-                        day: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: true
+                transactions.forEach(t => {
+                    const clean = t.date.replace(/(st|nd|rd|th)/i, '');
+                    const formattedDate = new Date(clean).toLocaleString('en-US', {
+                        month:'short', day:'2-digit', year:'numeric',
+                        hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true
                     });
-                    const amount = transaction.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    const originalType = transaction.originalType || type;
-                    const row = `
+                    const amount = t.amount.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                    const originalType = t.originalType || type;
+                    transactionsTableBody.insertAdjacentHTML('beforeend', `
                         <tr class="border-b border-gray-200">
                             <td class="p-3">${formattedDate}</td>
                             <td class="p-3">${amount}</td>
                             <td class="p-3">${originalType}</td>
                         </tr>
-                    `;
-                    transactionsTableBody.insertAdjacentHTML('beforeend', row);
+                    `);
                 });
                 transactionsModal.classList.add('visible');
             }
 
             if (monthlySelect) {
-                monthlySelect.addEventListener('change', function(e) {
+                monthlySelect.addEventListener('change', function () {
                     const selectedMonth = this.value;
                     monthlyTypesGrid.innerHTML = '';
                     if (selectedMonth) {
                         let iconIndex = 0;
-                        Object.entries(subaccountData).forEach(([locationId, data]) => {
-                            if (locationId === '' || locationId === 'WphrMU0x3Ocd2pEpBJcH') {
-                                return; // Skip aggregated data and Demo subaccount
-                            }
-                            const monthlyData = data.monthlyData?.[selectedMonth]?.types?.['Premium'];
-                            if (monthlyData) {
-                                const subaccountName = data.name;
-                                const totalAmount = monthlyData.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                const count = monthlyData.count;
-                                const plural = count !== 1 ? 's' : '';
-                                const icon = subaccountIcons[iconIndex % subaccountIcons.length];
-                                iconIndex++;
-                                const typeElement = document.createElement('div');
-                                typeElement.className = 'ghl-monthly-type bg-white p-4 border border-gray-200 rounded-lg flex justify-between items-center ghl-animate';
-                                typeElement.innerHTML = `
-                                    <div class="flex items-center">
-                                        <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center mr-3">
-                                            ${icon}
-                                        </div>
-                                        <div>
-                                            <div class="font-medium text-gray-800">${subaccountName}</div>
-                                            <div class="text-sm text-gray-500">${count} transaction${plural}</div>
-                                        </div>
+                        Object.entries(subaccountData).forEach(([locId, data]) => {
+                            if (locId === '' || locId === 'WphrMU0x3Ocd2pEpBJcH') return;
+                            const monthly = data.monthlyData?.[selectedMonth]?.types?.['Premium'];
+                            if (!monthly) return;
+                            const totalAmount = monthly.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                            const count = monthly.count;
+                            const plural = count !== 1 ? 's' : '';
+                            const icon = subaccountIcons[iconIndex % subaccountIcons.length];
+                            iconIndex++;
+                            const el = document.createElement('div');
+                            el.className = 'ghl-monthly-type bg-white p-4 border border-gray-200 rounded-lg flex justify-between items-center ghl-animate';
+                            el.innerHTML = `
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center mr-3">${icon}</div>
+                                    <div>
+                                        <div class="font-medium text-gray-800">${data.name}</div>
+                                        <div class="text-sm text-gray-500">${count} transaction${plural}</div>
                                     </div>
-                                    <div class="font-semibold text-gray-800">${totalAmount}</div>
-                                `;
-                                typeElement.addEventListener('click', () => {
-                                    showModal(subaccountName, 'Premium', selectedMonth, monthlyData.transactions);
-                                });
-                                monthlyTypesGrid.appendChild(typeElement);
-                            }
+                                </div>
+                                <div class="font-semibold text-gray-800">${totalAmount}</div>
+                            `;
+                            el.addEventListener('click', () => showModal(data.name, 'Premium', selectedMonth, monthly.transactions));
+                            monthlyTypesGrid.appendChild(el);
                         });
                     }
                 });
-                modalClose.addEventListener('click', () => {
-                    transactionsModal.classList.remove('visible');
-                });
-                transactionsModal.addEventListener('click', (e) => {
-                    if (e.target === transactionsModal) {
-                        transactionsModal.classList.remove('visible');
-                    }
-                });
+
+                modalClose.addEventListener('click', () => transactionsModal.classList.remove('visible'));
+                transactionsModal.addEventListener('click', e => { if (e.target === transactionsModal) transactionsModal.classList.remove('visible'); });
             }
 
-            // Initial dashboard update
             updateDashboard();
         });
     </script>
