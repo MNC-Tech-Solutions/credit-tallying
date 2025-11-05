@@ -162,7 +162,7 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
             if (stripos($type, 'WhatsApp') !== false || stripos($description, 'whatsapp') !== false) {
                 $category = 'whatsapp';
                 $creditAmount = 0.50; // 0.50 RM per WhatsApp credit
-            } elseif (stripos($type, 'Email') !== false || stripos($description, 'email') !== false) {
+            } elseif (stripos($type, 'Emails') !== false || stripos($description, 'emails') !== false) {
                 $category = 'email';
                 $creditAmount = 0.005; // 0.005 RM per Email credit
             } else {
