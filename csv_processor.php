@@ -1,448 +1,303 @@
 <?php
-
 // Enable error reporting
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Define the path to the CSV files directory relative to this script
-$scriptDir = dirname(__FILE__); // Get the directory where this script is located
-$csvDirectory = $scriptDir . '\csv_files'; // Go up one level and into csv_files
+$scriptDir = dirname(__FILE__);
+$csvDirectory = $scriptDir . DIRECTORY_SEPARATOR . 'csv_files';
 
-// Debug information
-echo "Script location: " . $scriptDir . "<br>";
-echo "Looking for CSV files in: " . $csvDirectory . "<br>";
-echo "Directory exists: " . (is_dir($csvDirectory) ? "Yes" : "No") . "<br>";
-
-// Function to check for new data
-function checkNewData($directory) {
-    $flagFile = $directory . '/.new_data';
-    if (file_exists($flagFile)) {
-        echo "Found flag file: " . $flagFile . "<br>";
-        $newFile = trim(file_get_contents($flagFile));
-        echo "New file from flag: " . $newFile . "<br>";
-        unlink($flagFile); // Remove the flag file
-        return $newFile;
-    }
-    return null;
-}
-
-// Function to get all CSV files from a directory
 function getCsvFiles($directory) {
-    $csvFiles = [];
-    
-    // Check if directory exists
-    if (!is_dir($directory)) {
-        echo "Directory not found: $directory<br>";
-        return $csvFiles;
-    }
-
-    // Check for new data
-    $newFile = checkNewData($directory);
-    if ($newFile !== null) {
-        $fullPath = $directory . '/' . $newFile;
-        echo "Checking for file: " . $fullPath . "<br>";
-        if (file_exists($fullPath)) {
-            echo "Found new file: " . $fullPath . "<br>";
-            return [$fullPath];
-        }
-    }
-
-    // If no new data, scan directory for all CSV files
-    $files = glob($directory . '/*.csv');
-    if (empty($files)) {
-        echo "No CSV files found in: $directory<br>";
-    } else {
-        echo "Found " . count($files) . " CSV files:<br>";
-        foreach ($files as $file) {
-            echo "- " . basename($file) . "<br>";
-        }
-        $csvFiles = $files;
-    }
-
-    return $csvFiles;
+    if (!is_dir($directory)) return [];
+    return glob($directory . '/*.csv');
 }
 
-// Function to process CSV files and count amounts grouped by locationId and type
 function processCsvFiles($csvFiles) {
     $results = [];
+    $allCategories = ['whatsapp', 'email', 'workflow', 'conversationAI', 'other'];
     
-    // Iterate through each CSV file
     foreach ($csvFiles as $filePath) {
-        if (!file_exists($filePath)) {
-            echo "File not found: $filePath<br>";
-            continue;
-        }
+        if (($handle = fopen($filePath, 'r')) !== false) {
+            $header = fgetcsv($handle);
+            if (!$header) continue;
 
-        // Open the CSV file
-        $file = fopen($filePath, 'r');
-        if ($file === false) {
-            echo "Failed to open file: $filePath<br>";
-            continue;
-        }
-
-        // Read the header
-        $header = fgetcsv($file);
-        if ($header === false) {
-            echo "Failed to read header from: $filePath<br>";
-            fclose($file);
-            continue;
-        }
-
-        // Map header columns - handle both old and new formats
-        $locationIdIndex = false;
-        $typeIndex = false;
-        $amountIndex = false;
-        $descriptionIndex = false;
-        
-        foreach ($header as $index => $column) {
-            $column = strtolower(trim($column));
-            if ($column === 'locationid' || $column === 'location id') $locationIdIndex = $index;
-            if ($column === 'type' || $column === 'transaction type') $typeIndex = $index;
-            if ($column === 'amount') $amountIndex = $index;
-            if ($column === 'description') $descriptionIndex = $index;
-        }
-
-        if ($locationIdIndex === false || $typeIndex === false || $amountIndex === false) {
-            echo "Required columns (locationId, type, or amount) not found in: $filePath<br>";
-            fclose($file);
-            continue;
-        }
-
-        // Process the data
-        while (($row = fgetcsv($file)) !== false) {
-            if (empty($row[$locationIdIndex]) || empty($row[$typeIndex]) || !isset($row[$amountIndex])) {
-                continue;
+            $colMap = [];
+            foreach ($header as $idx => $col) {
+                $name = strtolower(trim($col));
+                if (in_array($name, ['locationid', 'location id'])) $colMap['locId'] = $idx;
+                if (in_array($name, ['type', 'transaction type'])) $colMap['type'] = $idx;
+                if ($name === 'amount') $colMap['amount'] = $idx;
+                if ($name === 'description') $colMap['desc'] = $idx;
+                if (in_array($name, ['date', 'activity date'])) $colMap['date'] = $idx;
             }
 
-            $locationId = trim($row[$locationIdIndex]);
-            $type = trim($row[$typeIndex]);
-            $amount = floatval($row[$amountIndex]);
-            
-            // Determine category based on type and description
-            $category = 'other';
-            $description = $descriptionIndex !== false && isset($row[$descriptionIndex]) ? strtolower(trim($row[$descriptionIndex])) : '';
-            
-            if (stripos($type, 'WhatsApp') !== false || stripos($description, 'whatsapp') !== false) {
-                $category = 'whatsapp';
-                // Convert to credits: 0.50 RM per WhatsApp credit
-                $creditAmount = $amount;
-                $creditCount = $amount / 0.50;
-            } elseif (stripos($type, 'Email') !== false || stripos($description, 'email') !== false) {
-                $category = 'email';
-                // Convert to credits: 0.005 RM per Email credit
-                $creditAmount = $amount;
-                $creditCount = $amount / 0.005;
-            } elseif (stripos($type, 'Workflow') !== false || stripos($description, 'workflow') !== false) {
-                $category = 'workflow';
-                // Workflow uses actual amounts
-                $creditAmount = $amount;
-                $creditCount = $amount; // 1 credit = 1 RM for workflows
-            } else {
-                // Skip or categorize as other
+            while (($row = fgetcsv($handle)) !== false) {
+                $rawDate = $row[$colMap['date']] ?? 'Unknown';
+                $cleanDate = preg_replace('/(\d+)(st|nd|rd|th)/', '$1', $rawDate);
+                $timestamp = strtotime($cleanDate);
+                
+                $sortKey = $timestamp ? date('Y-m', $timestamp) : '0000-00';
+                $displayMonth = $timestamp ? date('F Y', $timestamp) : 'Unknown Date';
+                
+                $locId = trim($row[$colMap['locId']] ?? 'Unknown');
+                $amount = floatval($row[$colMap['amount']] ?? 0);
+                $type = trim($row[$colMap['type']] ?? 'Other');
+                $desc = strtolower($row[$colMap['desc']] ?? '');
+
                 $category = 'other';
-                $creditAmount = $amount;
-                $creditCount = 1;
+                $creditCount = $amount; 
+                if (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
+                    $category = 'whatsapp'; $creditCount = $amount / 0.50;
+                } elseif (stripos($type, 'Email') !== false || stripos($desc, 'email') !== false) {
+                    $category = 'email'; $creditCount = $amount / 0.005;
+                } elseif (stripos($type, 'Workflow') !== false || stripos($desc, 'workflow') !== false) {
+                    $category = 'workflow';
+                } elseif (stripos($type, 'Conversation and Voice AI') !== false || stripos($desc, 'conversationai') !== false) {
+                    $category = 'conversationAI';
+                }
+
+                if (!isset($results[$sortKey])) {
+                    $results[$sortKey] = [
+                        'name' => $displayMonth, 
+                        'locations' => [],
+                        'totals' => ['amount' => 0, 'credits' => 0, 'txns' => 0]
+                    ];
+                }
+
+                if (!isset($results[$sortKey]['locations'][$locId])) {
+                    $results[$sortKey]['locations'][$locId] = [
+                        'categories' => array_fill_keys($allCategories, ['amount' => 0, 'count' => 0, 'credits' => 0]),
+                        'totalAmount' => 0
+                    ];
+                }
+
+                $results[$sortKey]['locations'][$locId]['categories'][$category]['amount'] += $amount;
+                $results[$sortKey]['locations'][$locId]['categories'][$category]['count']++;
+                $results[$sortKey]['locations'][$locId]['categories'][$category]['credits'] += $creditCount;
+                $results[$sortKey]['locations'][$locId]['totalAmount'] += $amount;
+                
+                $results[$sortKey]['totals']['amount'] += $amount;
+                $results[$sortKey]['totals']['credits'] += $creditCount;
+                $results[$sortKey]['totals']['txns'] += 1;
             }
-
-            if (!isset($results[$locationId])) {
-                $results[$locationId] = [
-                    'categories' => [
-                        'whatsapp' => ['amount' => 0, 'count' => 0, 'credits' => 0],
-                        'email' => ['amount' => 0, 'count' => 0, 'credits' => 0],
-                        'workflow' => ['amount' => 0, 'count' => 0, 'credits' => 0],
-                        'other' => ['amount' => 0, 'count' => 0, 'credits' => 0]
-                    ],
-                    'types' => [],
-                    'totalAmount' => 0,
-                    'totalCredits' => 0
-                ];
-            }
-
-            // Update category totals
-            $results[$locationId]['categories'][$category]['amount'] += $amount;
-            $results[$locationId]['categories'][$category]['count']++;
-            $results[$locationId]['categories'][$category]['credits'] += $creditCount;
-
-            // Update type totals
-            if (!isset($results[$locationId]['types'][$type])) {
-                $results[$locationId]['types'][$type] = [
-                    'amount' => 0,
-                    'count' => 0,
-                    'category' => $category
-                ];
-            }
-
-            $results[$locationId]['types'][$type]['amount'] += $amount;
-            $results[$locationId]['types'][$type]['count']++;
-            
-            // Update overall totals
-            $results[$locationId]['totalAmount'] += $amount;
-            $results[$locationId]['totalCredits'] += $creditCount;
+            fclose($handle);
         }
-
-        fclose($file);
     }
-
+    krsort($results);
     return $results;
 }
 
-// Function to display results in a Bootstrap table
-function displayResults($results) {
-    // Start HTML output with Bootstrap
-    echo <<<HTML
+$data = processCsvFiles(getCsvFiles($csvDirectory));
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV Processing Results</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <title>Billing Summary</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .container {
-            max-width: 1200px;
-        }
-        h2 {
-            margin-bottom: 20px;
-            color: #343a40;
-        }
-        .sub-table {
-            margin-left: 20px;
-        }
-        .location-header {
-            background-color: #e9ecef;
-            font-weight: bold;
-        }
-        .category-whatsapp { background-color: #d1fae5 !important; }
-        .category-email { background-color: #dbeafe !important; }
-        .category-workflow { background-color: #f3e8ff !important; }
-        .category-other { background-color: #fef3c7 !important; }
-        .table-hover tbody tr:hover {
-            background-color: rgba(0,0,0,.075);
-        }
-        .badge {
-            font-size: 0.75em;
-        }
+        body { background-color: #f8fafc; font-family: 'Inter', sans-serif; color: #334155; }
+        .navbar { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 0.75rem 0; }
+        .nav-brand { font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
+        
+        .stat-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; }
+        .stat-label { font-size: 0.7rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+        .stat-value { font-size: 1.25rem; font-weight: 700; color: #0f172a; }
+
+        .card-container { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; margin-top: 1.5rem; }
+        .table thead th { background: #f8fafc; color: #64748b; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; padding: 1rem; border-bottom: 1px solid #e2e8f0; }
+        .location-row { background: #f1f5f9; font-weight: 600; color: #1e293b; }
+        
+        .dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 10px; }
+        .dot-whatsapp { background-color: #22c55e; }
+        .dot-email { background-color: #3b82f6; }
+        .dot-workflow { background-color: #a855f7; }
+        .dot-conversationAI { background-color: #f59e0b; }
+        .dot-other { background-color: #94a3b8; }
+
+        .month-section { display: none; }
+        .month-section.active { display: block; animation: fadeIn 0.3s ease; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        /* Filter Styles */
+        .filter-label { font-size: 0.7rem; font-weight: 700; color: #94a3b8; margin-right: 8px; }
+        .form-select-custom { border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; font-weight: 500; padding: 0.4rem 2rem 0.4rem 0.75rem; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>CSV Processing Results - Credit Usage Analysis</h2>
+
+<nav class="navbar sticky-top">
+    <div class="container d-flex flex-wrap justify-content-between align-items-center">
+        <span class="nav-brand fs-5">Analytics</span>
         
-        <!-- Summary Cards -->
-        <div class="row mb-4">
-HTML;
+        <div class="d-flex gap-3 align-items-center">
+            <div class="d-flex align-items-center">
+                <span class="filter-label">MONTH</span>
+                <select id="monthSelector" class="form-select-custom shadow-sm">
+                    <?php foreach ($data as $key => $content): ?>
+                        <option value="section-<?= $key ?>"><?= htmlspecialchars($content['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-    // Calculate overall totals for cards
-    $overallTotalAmount = 0;
-    $overallTotalCredits = 0;
-    $categoryTotals = [
-        'whatsapp' => ['amount' => 0, 'credits' => 0],
-        'email' => ['amount' => 0, 'credits' => 0],
-        'workflow' => ['amount' => 0, 'credits' => 0],
-        'other' => ['amount' => 0, 'credits' => 0]
-    ];
+            <div class="d-flex align-items-center">
+                <span class="filter-label">CATEGORY</span>
+                <select id="categorySelector" class="form-select-custom shadow-sm">
+                    <option value="all">All Categories</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="email">Email</option>
+                    <option value="workflow">Workflow</option>
+                    <option value="conversationAI">Voice AI</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</nav>
 
-    foreach ($results as $locationData) {
-        $overallTotalAmount += $locationData['totalAmount'];
-        $overallTotalCredits += $locationData['totalCredits'];
-        
-        foreach ($locationData['categories'] as $category => $data) {
-            $categoryTotals[$category]['amount'] += $data['amount'];
-            $categoryTotals[$category]['credits'] += $data['credits'];
-        }
-    }
-
-    // Display summary cards
-    $cardColors = [
-        'whatsapp' => 'success',
-        'email' => 'primary', 
-        'workflow' => 'info',
-        'other' => 'warning',
-        'total' => 'dark'
-    ];
-
-    $cardData = [
-        'whatsapp' => ['title' => 'WhatsApp', 'amount' => $categoryTotals['whatsapp']['amount'], 'credits' => $categoryTotals['whatsapp']['credits']],
-        'email' => ['title' => 'Email', 'amount' => $categoryTotals['email']['amount'], 'credits' => $categoryTotals['email']['credits']],
-        'workflow' => ['title' => 'Workflow', 'amount' => $categoryTotals['workflow']['amount'], 'credits' => $categoryTotals['workflow']['credits']],
-        'other' => ['title' => 'Other', 'amount' => $categoryTotals['other']['amount'], 'credits' => $categoryTotals['other']['credits']],
-        'total' => ['title' => 'Total', 'amount' => $overallTotalAmount, 'credits' => $overallTotalCredits]
-    ];
-
-    foreach ($cardData as $category => $data) {
-        $color = $cardColors[$category];
-        echo <<<HTML
-            <div class="col-md">
-                <div class="card text-white bg-$color mb-3">
-                    <div class="card-header">{$data['title']}</div>
-                    <div class="card-body">
-                        <h5 class="card-title">RM {$data['amount']}</h5>
-                        <p class="card-text">{$data['credits']} credits</p>
+<div class="container py-4">
+    <?php foreach ($data as $key => $content): ?>
+        <div id="section-<?= $key ?>" class="month-section" 
+             data-total-rm="<?= $content['totals']['amount'] ?>" 
+             data-total-credits="<?= $content['totals']['credits'] ?>" 
+             data-total-txns="<?= $content['totals']['txns'] ?>">
+            
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="stat-card shadow-sm">
+                        <div class="stat-label">Total Spend</div>
+                        <div class="stat-value" id="val-rm-<?= $key ?>">RM <?= number_format($content['totals']['amount'], 2) ?></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card shadow-sm">
+                        <div class="stat-label">Credit Consumption</div>
+                        <div class="stat-value" id="val-credits-<?= $key ?>"><?= number_format($content['totals']['credits'], 0) ?></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card shadow-sm">
+                        <div class="stat-label">Transactions</div>
+                        <div class="stat-value" id="val-txns-<?= $key ?>"><?= number_format($content['totals']['txns']) ?></div>
                     </div>
                 </div>
             </div>
-HTML;
-    }
 
-    echo <<<HTML
+            <div class="card-container shadow-sm">
+                <table class="table mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 45%">Location / Category</th>
+                            <th>Credits</th>
+                            <th>Count</th>
+                            <th class="text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($content['locations'] as $locId => $locData): ?>
+                            <tr class="location-row" data-loc-id="<?= htmlspecialchars($locId) ?>">
+                                <td colspan="3"><?= htmlspecialchars($locId) ?></td>
+                                <td class="text-end" data-loc-total-cell>RM <?= number_format($locData['totalAmount'], 2) ?></td>
+                            </tr>
+                            <?php foreach ($locData['categories'] as $cat => $cData): ?>
+                                <tr class="cat-row cat-type-<?= $cat ?>" 
+                                    data-cat="<?= $cat ?>" 
+                                    data-rm="<?= $cData['amount'] ?>" 
+                                    data-credits="<?= $cData['credits'] ?>" 
+                                    data-txns="<?= $cData['count'] ?>"
+                                    style="<?= $cData['count'] == 0 ? 'display:none;' : '' ?>">
+                                    <td class="ps-5">
+                                        <div class="d-flex align-items-center small fw-500">
+                                            <span class="dot dot-<?= $cat ?>"></span>
+                                            <?= ($cat === 'conversationAI') ? 'Voice AI' : ucfirst($cat) ?>
+                                        </div>
+                                    </td>
+                                    <td class="text-muted small"><?= number_format($cData['credits'], 2) ?></td>
+                                    <td class="text-muted small"><?= $cData['count'] ?> txns</td>
+                                    <td class="text-end fw-600 small">RM <?= number_format($cData['amount'], 2) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
+    <?php endforeach; ?>
+</div>
 
-        <!-- Detailed Table -->
-        <table class="table table-striped table-bordered table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th scope="col">Location ID</th>
-                    <th scope="col">Category</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Amount (RM)</th>
-                    <th scope="col">Credits</th>
-                    <th scope="col">Transaction Count</th>
-                </tr>
-            </thead>
-            <tbody>
-HTML;
+<script>
+    const monthSelector = document.getElementById('monthSelector');
+    const categorySelector = document.getElementById('categorySelector');
 
-    // Display each location and its data
-    foreach ($results as $locationId => $locationData) {
-        $firstRow = true;
-        
-        // Display location header row
-        printf(
-            "<tr class=\"location-header\"><td><strong>%s</strong></td><td colspan=\"2\"><strong>LOCATION TOTAL</strong></td><td><strong>%.2f</strong></td><td><strong>%.0f</strong></td><td></td></tr>\n",
-            htmlspecialchars($locationId),
-            $locationData['totalAmount'],
-            $locationData['totalCredits']
-        );
+    function applyFilters() {
+        const selectedMonthId = monthSelector.value;
+        const selectedCat = categorySelector.value;
 
-        // Display categories
-        foreach ($locationData['categories'] as $category => $categoryData) {
-            if ($categoryData['count'] > 0) {
-                $categoryName = ucfirst($category);
-                printf(
-                    "<tr class=\"category-$category\"><td></td><td><strong>%s</strong></td><td></td><td>%.2f</td><td>%.0f</td><td>%d</td></tr>\n",
-                    $categoryName,
-                    $categoryData['amount'],
-                    $categoryData['credits'],
-                    $categoryData['count']
-                );
+        // 1. Handle Month Visibility
+        document.querySelectorAll('.month-section').forEach(el => el.classList.remove('active'));
+        const currentMonth = document.getElementById(selectedMonthId);
+        if (!currentMonth) return;
+        currentMonth.classList.add('active');
+
+        // 2. Handle Category Row Visibility & Recalculate Totals
+        let pageTotalRM = 0;
+        let pageTotalCredits = 0;
+        let pageTotalTxns = 0;
+
+        // We only care about rows inside the ACTIVE month
+        const rows = currentMonth.querySelectorAll('.cat-row');
+        const locHeaders = currentMonth.querySelectorAll('.location-row');
+
+        locHeaders.forEach(header => {
+            header.style.display = 'none'; // Default hide, show if category matches
+            let locTotal = 0;
+            
+            // Find all category rows belonging to this location
+            let sibling = header.nextElementSibling;
+            while (sibling && sibling.classList.contains('cat-row')) {
+                const catType = sibling.getAttribute('data-cat');
+                const txnAmount = parseFloat(sibling.getAttribute('data-txns'));
+                
+                const matchesCat = (selectedCat === 'all' || selectedCat === catType);
+                const hasData = txnAmount > 0;
+
+                if (matchesCat && hasData) {
+                    sibling.style.display = 'table-row';
+                    header.style.display = 'table-row';
+                    
+                    // Add to totals
+                    const rm = parseFloat(sibling.getAttribute('data-rm'));
+                    const creds = parseFloat(sibling.getAttribute('data-credits'));
+                    
+                    locTotal += rm;
+                    pageTotalRM += rm;
+                    pageTotalCredits += creds;
+                    pageTotalTxns += txnAmount;
+                } else {
+                    sibling.style.display = 'none';
+                }
+                sibling = sibling.nextElementSibling;
             }
-        }
+            // Update Location Header Total
+            header.querySelector('[data-loc-total-cell]').innerText = 'RM ' + locTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+        });
 
-        // Display individual types
-        foreach ($locationData['types'] as $type => $typeData) {
-            $categoryClass = 'category-' . $typeData['category'];
-            printf(
-                "<tr class=\"$categoryClass\"><td></td><td></td><td>%s <span class=\"badge bg-secondary\">%s</span></td><td>%.2f</td><td>%.0f</td><td>%d</td></tr>\n",
-                htmlspecialchars($type),
-                ucfirst($typeData['category']),
-                $typeData['amount'],
-                $typeData['amount'] / ($typeData['category'] === 'email' ? 0.005 : ($typeData['category'] === 'whatsapp' ? 0.50 : 1)),
-                $typeData['count']
-            );
-        }
+        // 3. Update Summary Cards
+        const key = selectedMonthId.replace('section-', '');
+        document.getElementById('val-rm-' + key).innerText = 'RM ' + pageTotalRM.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('val-credits-' + key).innerText = pageTotalCredits.toLocaleString(undefined, {maximumFractionDigits: 0});
+        document.getElementById('val-txns-' + key).innerText = pageTotalTxns.toLocaleString() + ' logs';
     }
 
-    // Close HTML
-    echo <<<HTML
-            </tbody>
-        </table>
-        
-        <!-- Credit Conversion Info -->
-        <div class="alert alert-info mt-4">
-            <h5>Credit Conversion Rates:</h5>
-            <ul class="mb-0">
-                <li><strong>WhatsApp:</strong> 1 credit = RM 0.50</li>
-                <li><strong>Email:</strong> 1 credit = RM 0.005</li>
-                <li><strong>Workflow:</strong> 1 credit = RM 1.00</li>
-            </ul>
-        </div>
-    </div>
-    <!-- Bootstrap JS (optional, for interactive features) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    monthSelector.addEventListener('change', applyFilters);
+    categorySelector.addEventListener('change', applyFilters);
+
+    // Initial run
+    window.onload = applyFilters;
+</script>
+
 </body>
 </html>
-HTML;
-}
-
-// Main execution
-try {
-    // Get all CSV files from the directory
-    $csvFiles = getCsvFiles($csvDirectory);
-
-    if (empty($csvFiles)) {
-        echo <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV Processing Results</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-</head>
-<body>
-    <div class="container mt-4">
-        <div class="alert alert-warning" role="alert">
-            No CSV files to process.
-        </div>
-    </div>
-</body>
-</html>
-HTML;
-        exit;
-    }
-
-    // Process the CSV files
-    $results = processCsvFiles($csvFiles);
-
-    if (empty($results)) {
-        echo <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV Processing Results</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-</head>
-<body>
-    <div class="container mt-4">
-        <div class="alert alert-warning" role="alert">
-            No valid data processed from the CSV files.
-        </div>
-    </div>
-</body>
-</html>
-HTML;
-        exit;
-    }
-
-    // Display the results
-    displayResults($results);
-
-} catch (Exception $e) {
-    echo <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV Processing Results</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-</head>
-<body>
-    <div class="container mt-4">
-        <div class="alert alert-danger" role="alert">
-            An error occurred: {$e->getMessage()}
-        </div>
-    </div>
-</body>
-</html>
-HTML;
-}
-
-?>
