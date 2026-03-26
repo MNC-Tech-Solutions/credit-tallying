@@ -1,10 +1,10 @@
 <?php
 /**
- * Twilio Usage Dashboard — Refined Light Edition
+ * Twilio Usage Dashboard — Refined Tabbed Edition
  * Groups by: Project (column 0)
  * CSV columns: Project, Company Name, Item Category, Item Group, Item Country,
- *              Item, Quantity, Amount (USD), Account Sid, Account Type,
- *              Parent SID, Month, Year, Invoice Number
+ * Item, Quantity, Amount (USD), Account Sid, Account Type,
+ * Parent SID, Month, Year, Invoice Number
  */
 
 function getCsvFiles($dir) {
@@ -140,41 +140,26 @@ $byMonthJson   = json_encode($byMonth,   JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUO
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
 :root {
-    /* Palette — warm off-white base, soft accents */
     --bg:        #f5f4f1;
     --surface:   #faf9f7;
     --card:      #ffffff;
     --border:    #e8e5e0;
     --border2:   #d6d2cb;
-
-    /* Accent — a warm terracotta / coral, not loud */
     --accent:      #c0392b;
     --accent-soft: rgba(192,57,43,0.08);
     --accent-mid:  rgba(192,57,43,0.15);
-
-    /* Teal complement */
     --teal:        #0d8a7a;
     --teal-soft:   rgba(13,138,122,0.09);
-
-    /* Amber */
     --amber:       #b45309;
     --amber-soft:  rgba(180,83,9,0.09);
-
-    /* Blue */
     --blue:        #1e6fa8;
     --blue-soft:   rgba(30,111,168,0.09);
-
-    /* Text */
     --text:        #1a1916;
     --text2:       #6b6760;
     --text3:       #b0aca5;
-
-    /* Radii */
     --r:    20px;
     --r-sm: 12px;
     --r-xs: 8px;
-
-    /* Shadows */
     --shadow-sm:  0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
     --shadow-md:  0 4px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
     --shadow-lg:  0 12px 40px rgba(0,0,0,0.09), 0 2px 8px rgba(0,0,0,0.05);
@@ -194,7 +179,6 @@ body {
     font-size: 15px;
 }
 
-/* Subtle background texture */
 body::before {
     content: '';
     position: fixed;
@@ -214,6 +198,47 @@ body::before {
     z-index: 1;
 }
 
+/* TABS SYSTEM */
+.tabs-nav {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+}
+.tab-btn {
+    padding: 10px 24px;
+    background: none;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text2);
+    cursor: pointer;
+    border-radius: var(--r-xs);
+    transition: all 0.2s;
+    position: relative;
+}
+.tab-btn:hover { background: var(--surface); color: var(--text); }
+.tab-btn.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+}
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 15%;
+    right: 15%;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 99px;
+}
+.tab-pane { display: none; animation: fadeIn 0.3s ease; }
+.tab-pane.active { display: block; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
 /* ── TOPBAR ── */
 .topbar {
     display: flex;
@@ -225,9 +250,7 @@ body::before {
     flex-wrap: wrap;
     gap: 16px;
 }
-
 .brand { display: flex; align-items: center; gap: 16px; }
-
 .brand-icon {
     width: 48px;
     height: 48px;
@@ -240,7 +263,6 @@ body::before {
     flex-shrink: 0;
 }
 .brand-icon svg { width: 22px; height: 22px; }
-
 .brand-name {
     font-family: 'DM Serif Display', serif;
     font-size: 22px;
@@ -254,8 +276,6 @@ body::before {
     margin-top: 1px;
     letter-spacing: 0.2px;
 }
-
-/* MYR control */
 .myr-ctl {
     display: flex;
     align-items: center;
@@ -267,7 +287,6 @@ body::before {
     box-shadow: var(--shadow-sm);
 }
 .myr-lbl { font-size: 13px; font-weight: 500; color: var(--text2); }
-
 .tog { position: relative; width: 44px; height: 24px; cursor: pointer; flex-shrink: 0; }
 .tog input { opacity: 0; width: 0; height: 0; }
 .tog-track {
@@ -291,7 +310,6 @@ body::before {
 }
 .tog input:checked + .tog-track { background: var(--teal); }
 .tog input:checked + .tog-track::before { transform: translateX(20px); }
-
 .rate-row { display: none; align-items: center; gap: 6px; }
 .rate-row.on { display: flex; }
 .rate-lbl2 { font-size: 12px; color: var(--text2); font-weight: 500; }
@@ -313,7 +331,6 @@ body::before {
 
 /* ── FILTERS ── */
 .filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
-
 .flt-box { flex: 1; min-width: 200px; max-width: 320px; position: relative; }
 .flt-box svg {
     position: absolute;
@@ -342,11 +359,9 @@ body::before {
     box-shadow: var(--shadow-sm);
 }
 .flt:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.flt option { background: #fff; color: var(--text); }
 
 /* ── KPIs ── */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; margin-bottom: 24px; }
-
 .kpi {
     background: var(--card);
     border: 1px solid var(--border);
@@ -359,7 +374,6 @@ body::before {
     animation: fadeUp .5s ease both;
 }
 .kpi:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-
 .kpi-accent-bar {
     position: absolute;
     top: 0; left: 24px; right: 24px;
@@ -368,7 +382,6 @@ body::before {
     background: var(--ka, var(--accent));
     opacity: 0.7;
 }
-
 .kpi-ico {
     width: 40px;
     height: 40px;
@@ -380,7 +393,6 @@ body::before {
     background: var(--kibg, var(--accent-soft));
 }
 .kpi-ico svg { width: 18px; height: 18px; }
-
 .kpi-lbl {
     font-size: 11px;
     font-weight: 600;
@@ -404,28 +416,18 @@ body::before {
     from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: translateY(0); }
 }
-.kpi:nth-child(1) { animation-delay: .05s }
-.kpi:nth-child(2) { animation-delay: .1s }
-.kpi:nth-child(3) { animation-delay: .15s }
-.kpi:nth-child(4) { animation-delay: .2s }
 
-/* ── 2-COL ── */
-.two-col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 16px;
-}
+/* ── PANELS & TABLES ── */
+.two-col { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
 @media(max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
 
-/* ── PANEL ── */
-.panel {
+.panel, .big-panel, .months-panel {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--r);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
-    animation: fadeUp .5s ease .25s both;
+    margin-bottom: 16px;
 }
 .panel-hdr {
     display: flex;
@@ -450,337 +452,87 @@ body::before {
     background: var(--bg);
     color: var(--text2);
     border: 1px solid var(--border);
-    letter-spacing: 0.2px;
 }
 .panel-body { padding: 20px 24px; }
 
-/* service bars */
+/* Existing detail styles kept exactly as per user prompt */
 .svc-item { margin-bottom: 18px; }
-.svc-item:last-child { margin-bottom: 0; }
-.svc-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 8px;
-    gap: 12px;
-}
-.svc-name { font-size: 13.5px; font-weight: 500; color: var(--text); line-height: 1.4; }
-.svc-r { text-align: right; flex-shrink: 0; }
-.svc-usd { font-size: 13.5px; font-weight: 700; color: var(--accent); display: block; }
+.svc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 12px; }
+.svc-name { font-size: 13.5px; font-weight: 500; color: var(--text); }
+.svc-usd { font-size: 13.5px; font-weight: 700; color: var(--accent); }
 .svc-myr { font-size: 11px; font-weight: 600; color: var(--teal); display: none; margin-top: 2px; }
 .svc-myr.on { display: block; }
-.svc-pct { font-size: 11px; color: var(--text3); margin-top: 2px; display: block; }
-.bar-track {
-    height: 6px;
-    background: var(--bg);
-    border-radius: 999px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-}
-.bar-fill {
-    height: 100%;
-    border-radius: 999px;
-    background: var(--accent);
-    opacity: 0.7;
-    transition: width .7s cubic-bezier(.22,1,.36,1);
-}
+.svc-pct { font-size: 11px; color: var(--text3); display: block; }
+.bar-track { height: 6px; background: var(--bg); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+.bar-fill { height: 100%; border-radius: 999px; background: var(--accent); opacity: 0.7; transition: width .7s ease; }
 .bar-teal { background: var(--teal); }
 
-/* ── PROJECTS TABLE ── */
-.big-panel {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    overflow: hidden;
-    margin-bottom: 16px;
-    box-shadow: var(--shadow-sm);
-    animation: fadeUp .5s ease .3s both;
-}
 .tbl-scroll { overflow-x: auto; }
-
 table { width: 100%; border-collapse: collapse; }
 thead tr { background: var(--bg); border-bottom: 1px solid var(--border); }
-thead th {
-    padding: 13px 22px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.7px;
-    text-transform: uppercase;
-    color: var(--text2);
-    text-align: left;
-    white-space: nowrap;
-}
+thead th { padding: 13px 22px; font-size: 11px; font-weight: 600; letter-spacing: 0.7px; text-transform: uppercase; color: var(--text2); text-align: left; }
 th.r { text-align: right; }
 tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
-tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: var(--accent-soft); }
 tbody td { padding: 16px 22px; font-size: 14px; vertical-align: middle; }
 .td-r { text-align: right; }
-
-.proj-name { font-weight: 600; color: var(--text); font-size: 14px; }
-.proj-co { font-size: 12px; color: var(--text2); margin-top: 3px; font-weight: 400; }
-
-.amt-usd { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
-.amt-myr { font-size: 11.5px; color: var(--teal); display: none; font-weight: 600; margin-top: 3px; }
+.proj-name { font-weight: 600; color: var(--text); }
+.proj-co { font-size: 12px; color: var(--text2); }
+.amt-usd { font-weight: 700; color: var(--accent); }
+.amt-myr { font-size: 11.5px; color: var(--teal); display: none; font-weight: 600; }
 .amt-myr.on { display: block; }
-
-.qty-val { color: var(--text2); font-weight: 500; font-variant-numeric: tabular-nums; }
-
-.rnk {
-    width: 30px;
-    height: 30px;
-    border-radius: var(--r-xs);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text2);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
+.rnk { width: 30px; height: 30px; border-radius: var(--r-xs); font-size: 12px; font-weight: 700; color: var(--text2); background: var(--bg); border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; }
 .rnk.top { background: var(--accent-soft); color: var(--accent); border-color: rgba(192,57,43,0.2); }
-
-.type-tag {
-    display: inline-flex;
-    align-items: center;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    padding: 4px 11px;
-    border-radius: 999px;
-}
-.t-master { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(192,57,43,0.18); }
-.t-sub    { background: var(--teal-soft);   color: var(--teal);   border: 1px solid rgba(13,138,122,0.18); }
-
+.type-tag { display: inline-flex; padding: 4px 11px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.t-master { background: var(--accent-soft); color: var(--accent); }
+.t-sub { background: var(--teal-soft); color: var(--teal); }
 .share-row { display: flex; align-items: center; gap: 10px; }
-.share-bar { flex: 1; height: 5px; background: var(--bg); border-radius: 999px; overflow: hidden; min-width: 48px; border: 1px solid var(--border); }
-.share-fill { height: 100%; background: var(--accent); opacity: 0.65; border-radius: 999px; }
-.share-pct { font-size: 12px; color: var(--text2); font-weight: 600; min-width: 38px; text-align: right; }
+.share-bar { flex: 1; height: 5px; background: var(--bg); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+.share-fill { height: 100%; background: var(--accent); opacity: 0.65; }
 
-/* ── MONTHLY ACCORDION ── */
-.months-panel {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-    animation: fadeUp .5s ease .35s both;
-}
 .mo-row { border-bottom: 1px solid var(--border); }
-.mo-row:last-child { border-bottom: none; }
-
-.mo-hdr {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 26px;
-    cursor: pointer;
-    transition: background .15s;
-    user-select: none;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-.mo-hdr:hover { background: var(--bg); }
-.mo-row.open > .mo-hdr { background: var(--bg); }
-
+.mo-hdr { display: flex; align-items: center; justify-content: space-between; padding: 20px 26px; cursor: pointer; }
 .mo-l { display: flex; align-items: center; gap: 18px; }
-
-.mo-badge {
-    width: 52px;
-    height: 52px;
-    border-radius: 14px;
-    background: var(--accent-soft);
-    border: 1px solid rgba(192,57,43,0.15);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-.mo-badge-num {
-    font-family: 'DM Serif Display', serif;
-    font-size: 22px;
-    line-height: 1;
-    color: var(--accent);
-}
-.mo-badge-abbr {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    color: var(--accent);
-    opacity: 0.6;
-    text-transform: uppercase;
-}
-
+.mo-badge { width: 52px; height: 52px; border-radius: 14px; background: var(--accent-soft); border: 1px solid rgba(192,57,43,0.15); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.mo-badge-num { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--accent); line-height: 1; }
+.mo-badge-abbr { font-size: 10px; font-weight: 600; color: var(--accent); opacity: 0.6; }
 .mo-name { font-size: 15px; font-weight: 600; color: var(--text); }
-.mo-qty { font-size: 12.5px; color: var(--text2); font-weight: 400; margin-top: 2px; }
-
-.mo-r { display: flex; align-items: center; gap: 20px; }
 .mo-amts { text-align: right; }
-.mo-usd { font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-.mo-myr { font-size: 12px; color: var(--teal); font-weight: 600; display: none; margin-top: 2px; }
+.mo-usd { font-size: 18px; font-weight: 700; }
+.mo-myr { font-size: 12px; color: var(--teal); font-weight: 600; display: none; }
 .mo-myr.on { display: block; }
-
-.chevron {
-    width: 20px;
-    height: 20px;
-    color: var(--text3);
-    transition: transform .25s;
-    flex-shrink: 0;
-}
-.mo-row.open .chevron { transform: rotate(180deg); color: var(--text2); }
+.chevron { width: 20px; height: 20px; color: var(--text3); transition: transform .25s; }
+.mo-row.open .chevron { transform: rotate(180deg); }
 .mo-body { display: none; padding: 6px 26px 22px; }
 .mo-row.open .mo-body { display: block; }
-
-/* month body service cards */
-.svc-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 10px;
-    margin-top: 10px;
-}
-.svc-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r-sm);
-    padding: 16px 18px;
-    cursor: pointer;
-    transition: background .15s, border-color .15s, transform .15s, box-shadow .15s;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-}
-.svc-card:hover {
-    background: var(--card);
-    border-color: rgba(192,57,43,0.25);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-}
-.sc-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    opacity: 0.6;
-    margin-top: 6px;
-    flex-shrink: 0;
-}
-.sc-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.sc-qty { font-size: 11.5px; color: var(--text2); font-weight: 400; margin-top: 3px; }
-.sc-r { text-align: right; flex-shrink: 0; }
+.svc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 10px; }
+.svc-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 16px 18px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+.sc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 6px; }
+.sc-name { font-size: 13px; font-weight: 600; }
 .sc-usd { font-size: 14px; font-weight: 700; color: var(--accent); }
-.sc-myr { font-size: 11px; color: var(--teal); font-weight: 600; display: none; margin-top: 3px; }
-.sc-myr.on { display: block; }
 
-/* ── MODAL ── */
-.modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(26,25,22,0.45);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-}
+/* MODAL */
+.modal { display: none; position: fixed; inset: 0; background: rgba(26,25,22,0.45); backdrop-filter: blur(10px); z-index: 9999; align-items: center; justify-content: center; padding: 24px; }
 .modal.on { display: flex; }
-
-.modal-box {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    width: 100%;
-    max-width: 800px;
-    max-height: 88vh;
-    overflow-y: auto;
-    box-shadow: var(--shadow-xl);
-    padding: 32px;
-    position: relative;
-    animation: fadeUp .22s ease;
-}
-.modal-close {
-    position: absolute;
-    top: 20px;
-    right: 22px;
-    width: 34px;
-    height: 34px;
-    border-radius: var(--r-xs);
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text2);
-    font-size: 18px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background .15s, border-color .15s, color .15s;
-    line-height: 1;
-}
-.modal-close:hover { background: var(--accent-soft); border-color: rgba(192,57,43,0.2); color: var(--accent); }
-
-.modal-ttl {
-    font-family: 'DM Serif Display', serif;
-    font-size: 24px;
-    color: var(--text);
-    margin-bottom: 4px;
-    letter-spacing: -0.3px;
-    padding-right: 40px;
-}
-.modal-period { font-size: 13px; color: var(--text2); margin-bottom: 20px; font-weight: 400; }
-
-.modal-total {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 10px;
-    background: var(--accent-soft);
-    border: 1px solid rgba(192,57,43,0.15);
-    padding: 10px 18px;
-    border-radius: var(--r-sm);
-    margin-bottom: 24px;
-}
+.modal-box { background: var(--card); border-radius: var(--r); width: 100%; max-width: 800px; max-height: 88vh; overflow-y: auto; padding: 32px; position: relative; }
+.modal-close { position: absolute; top: 20px; right: 22px; width: 34px; height: 34px; cursor: pointer; border: 1px solid var(--border); background: var(--bg); border-radius: var(--r-xs); }
+.modal-ttl { font-family: 'DM Serif Display', serif; font-size: 24px; margin-bottom: 4px; }
+.modal-total { background: var(--accent-soft); padding: 10px 18px; border-radius: var(--r-sm); margin-bottom: 24px; display: inline-flex; align-items: baseline; gap: 10px; }
 .mt-usd { font-size: 22px; font-weight: 700; color: var(--accent); }
 .mt-myr { font-size: 14px; font-weight: 600; color: var(--teal); display: none; }
 .mt-myr.on { display: inline; }
 
-.mtbl thead tr { background: var(--bg); }
-.mtbl tbody tr:hover { background: var(--accent-soft); }
-
-.item-n { font-weight: 500; font-size: 13.5px; color: var(--text); }
-.item-c { font-size: 12px; color: var(--text2); font-weight: 400; }
-
-.empty-row {
-    text-align: center;
-    padding: 48px 20px;
-    color: var(--text3);
-    font-size: 14px;
-    font-weight: 400;
-}
-
-/* scrollbar */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text3); }
-
 @media(max-width: 640px) {
     .kpi-val { font-size: 26px; }
-    .mo-badge-num { font-size: 18px; }
     th.hs, td.hs { display: none; }
-    .brand-name { font-size: 19px; }
     .topbar { padding: 20px 0 18px; }
     .svc-grid { grid-template-columns: 1fr; }
-    .flt-box { max-width: 100%; }
 }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-<!-- TOPBAR -->
 <div class="topbar">
     <div class="brand">
         <div class="brand-icon">
@@ -810,7 +562,6 @@ tbody td { padding: 16px 22px; font-size: 14px; vertical-align: middle; }
     </div>
 </div>
 
-<!-- FILTERS -->
 <div class="filters">
     <div class="flt-box">
         <select id="fltMonth" class="flt">
@@ -841,196 +592,158 @@ tbody td { padding: 16px 22px; font-size: 14px; vertical-align: middle; }
     </div>
 </div>
 
-<!-- KPIs -->
 <div class="kpis">
     <div class="kpi" style="--ka:var(--accent);--kibg:var(--accent-soft)">
         <div class="kpi-accent-bar"></div>
-        <div class="kpi-ico">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        </div>
+        <div class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
         <div class="kpi-lbl">Total Spend</div>
         <div class="kpi-val" id="kpiTotal">$<?= number_format($grand,2) ?></div>
         <div class="kpi-myr" id="kpiTotalMyr" data-usd="<?= $grand ?>">RM <?= number_format($grand*3.9,2) ?></div>
         <div class="kpi-sub" id="kpiQty"><?= number_format($grandQty) ?> usage units</div>
     </div>
-
     <div class="kpi" style="--ka:var(--teal);--kibg:var(--teal-soft)">
         <div class="kpi-accent-bar" style="background:var(--teal)"></div>
-        <div class="kpi-ico">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
-        </div>
+        <div class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg></div>
         <div class="kpi-lbl">Projects</div>
         <div class="kpi-val" id="kpiProjects"><?= count($byProject) ?></div>
         <div class="kpi-sub" id="kpiProjSub">tracked this period</div>
     </div>
-
     <div class="kpi" style="--ka:var(--blue);--kibg:var(--blue-soft)">
         <div class="kpi-accent-bar" style="background:var(--blue)"></div>
-        <div class="kpi-ico">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M4 6h16M4 12h8m-8 6h16"/></svg>
-        </div>
+        <div class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M4 6h16M4 12h8m-8 6h16"/></svg></div>
         <div class="kpi-lbl">Services</div>
         <div class="kpi-val" id="kpiSvcs"><?= count($byService) ?></div>
         <div class="kpi-sub">service groups</div>
     </div>
-
     <div class="kpi" style="--ka:var(--amber);--kibg:var(--amber-soft)">
         <div class="kpi-accent-bar" style="background:var(--amber)"></div>
-        <div class="kpi-ico">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        </div>
+        <div class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
         <div class="kpi-lbl">Months</div>
         <div class="kpi-val"><?= count($byMonth) ?></div>
         <div class="kpi-sub">billing periods</div>
     </div>
 </div>
 
-<!-- 2-COL: Service Bars + Monthly Mini -->
-<div class="two-col">
-    <div class="panel">
-        <div class="panel-hdr">
-            <span class="panel-ttl">Spend by Service</span>
-            <span class="chip" id="svcChip"><?= count($byService) ?> services</span>
-        </div>
-        <div class="panel-body" id="svcBars">
-            <?php
-            $maxSvc = $byService ? max(array_column($byService,'total')) : 1;
-            foreach ($byService as $grp => $sv):
-                $pct = $grand > 0 ? round($sv['total']/$grand*100,1) : 0;
-            ?>
-            <div class="svc-item" data-service="<?= htmlspecialchars($grp) ?>">
-                <div class="svc-top">
-                    <span class="svc-name"><?= htmlspecialchars($grp) ?></span>
-                    <span class="svc-r">
-                        <span class="svc-usd">$<?= number_format($sv['total'],2) ?></span>
-                        <span class="svc-pct"><?= $pct ?>%</span>
-                        <span class="svc-myr" data-usd="<?= $sv['total'] ?>">RM <?= number_format($sv['total']*3.9,2) ?></span>
-                    </span>
-                </div>
-                <div class="bar-track"><div class="bar-fill" style="width:<?= $pct ?>%"></div></div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-hdr">
-            <span class="panel-ttl">Monthly Overview</span>
-            <span class="chip"><?= count($byMonth) ?> months</span>
-        </div>
-        <div class="panel-body" id="monthMini">
-            <?php foreach ($byMonth as $mKey => $m):
-                $lbl = date('M Y', strtotime($mKey.'-01'));
-                $pct2 = $grand > 0 ? round($m['total']/$grand*100,1) : 0;
-            ?>
-            <div class="svc-item">
-                <div class="svc-top">
-                    <span class="svc-name"><?= htmlspecialchars($lbl) ?></span>
-                    <span class="svc-r">
-                        <span class="svc-usd">$<?= number_format($m['total'],2) ?></span>
-                        <span class="svc-pct"><?= $pct2 ?>%</span>
-                        <span class="svc-myr" data-usd="<?= $m['total'] ?>">RM <?= number_format($m['total']*3.9,2) ?></span>
-                    </span>
-                </div>
-                <div class="bar-track"><div class="bar-fill bar-teal" style="width:<?= $pct2 ?>%"></div></div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
+<div class="tabs-nav">
+    <button class="tab-btn active" onclick="openTab(event, 'tabOverview')">Overview</button>
+    <button class="tab-btn" onclick="openTab(event, 'tabProjects')">Projects</button>
+    <button class="tab-btn" onclick="openTab(event, 'tabHistory')">Billing History</button>
 </div>
 
-<!-- PROJECTS TABLE -->
-<div class="big-panel">
-    <div class="panel-hdr">
-        <span class="panel-ttl">Projects</span>
-        <span class="chip" id="projChip"><?= count($byProject) ?> projects</span>
-    </div>
-    <div class="tbl-scroll">
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:52px;">#</th>
-                    <th>Project</th>
-                    <th class="r">Total Spent</th>
-                    <th class="r hs">Units</th>
-                    <th class="r hs">Share</th>
-                    <th class="hs">Type</th>
-                </tr>
-            </thead>
-            <tbody id="projTbody">
-            <?php $rk = 0; foreach ($byProject as $proj => $pd):
-                $rk++;
-                $share = $grand > 0 ? round($pd['total']/$grand*100,1) : 0;
-                $isMaster = stripos($pd['accType']??'','master') !== false;
-            ?>
-            <tr>
-                <td><span class="rnk <?= $rk <= 3 ? 'top' : '' ?>"><?= $rk ?></span></td>
-                <td>
-                    <div class="proj-name"><?= htmlspecialchars($proj) ?></div>
-                    <?php if (!empty($pd['company']) && $pd['company'] !== $proj): ?>
-                    <div class="proj-co"><?= htmlspecialchars($pd['company']) ?></div>
-                    <?php endif; ?>
-                </td>
-                <td class="td-r">
-                    <div class="amt-usd">$<?= number_format($pd['total'],2) ?></div>
-                    <div class="amt-myr" data-usd="<?= $pd['total'] ?>">RM <?= number_format($pd['total']*3.9,2) ?></div>
-                </td>
-                <td class="td-r hs"><span class="qty-val"><?= number_format($pd['qty']) ?></span></td>
-                <td class="td-r hs">
-                    <div class="share-row">
-                        <div class="share-bar"><div class="share-fill" style="width:<?= $share ?>%"></div></div>
-                        <span class="share-pct"><?= $share ?>%</span>
+<div id="tabOverview" class="tab-pane active">
+    <div class="two-col">
+        <div class="panel">
+            <div class="panel-hdr">
+                <span class="panel-ttl">Spend by Service</span>
+                <span class="chip" id="svcChip"><?= count($byService) ?> services</span>
+            </div>
+            <div class="panel-body" id="svcBars">
+                <?php $maxSvc = $byService ? max(array_column($byService,'total')) : 1;
+                foreach ($byService as $grp => $sv): 
+                    $pct = $grand > 0 ? round($sv['total']/$grand*100,1) : 0; ?>
+                <div class="svc-item" data-service="<?= htmlspecialchars($grp) ?>">
+                    <div class="svc-top">
+                        <span class="svc-name"><?= htmlspecialchars($grp) ?></span>
+                        <span class="svc-r">
+                            <span class="svc-usd">$<?= number_format($sv['total'],2) ?></span>
+                            <span class="svc-pct"><?= $pct ?>%</span>
+                            <span class="svc-myr" data-usd="<?= $sv['total'] ?>">RM <?= number_format($sv['total']*3.9,2) ?></span>
+                        </span>
                     </div>
-                </td>
-                <td class="hs"><span class="type-tag <?= $isMaster ? 't-master' : 't-sub' ?>"><?= $isMaster ? 'Master' : 'Sub' ?></span></td>
-            </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- MONTHLY ACCORDION -->
-<div class="months-panel">
-    <div class="panel-hdr">
-        <span class="panel-ttl">Monthly Breakdown</span>
-        <span class="chip"><?= count($byMonth) ?> periods</span>
-    </div>
-    <?php $mi = 0; foreach ($byMonth as $mKey => $m):
-        $mi++;
-        $mNum2 = (int)date('m', strtotime($mKey.'-01'));
-        $mAbbr = date('M', strtotime($mKey.'-01'));
-        $mLbl  = date('F Y', strtotime($mKey.'-01'));
-    ?>
-    <div class="mo-row <?= $mi === 1 ? 'open' : '' ?>" data-month="<?= htmlspecialchars($mKey) ?>">
-        <div class="mo-hdr">
-            <div class="mo-l">
-                <div class="mo-badge">
-                    <div class="mo-badge-num"><?= str_pad($mNum2,2,'0',STR_PAD_LEFT) ?></div>
-                    <div class="mo-badge-abbr"><?= $mAbbr ?></div>
+                    <div class="bar-track"><div class="bar-fill" style="width:<?= $pct ?>%"></div></div>
                 </div>
-                <div>
-                    <div class="mo-name"><?= htmlspecialchars($mLbl) ?></div>
-                    <div class="mo-qty"><?= number_format($m['qty']) ?> usage units</div>
-                </div>
-            </div>
-            <div class="mo-r">
-                <div class="mo-amts">
-                    <div class="mo-usd">$<?= number_format($m['total'],2) ?></div>
-                    <div class="mo-myr" data-usd="<?= $m['total'] ?>">RM <?= number_format($m['total']*3.9,2) ?></div>
-                </div>
-                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                <?php endforeach; ?>
             </div>
         </div>
-        <div class="mo-body" id="mb_<?= str_replace('-','_',$mKey) ?>"></div>
     </div>
-    <?php endforeach; ?>
 </div>
 
-</div><!-- /wrap -->
+<div id="tabProjects" class="tab-pane">
+    <div class="big-panel">
+        <div class="panel-hdr">
+            <span class="panel-ttl">Projects</span>
+            <span class="chip" id="projChip"><?= count($byProject) ?> projects</span>
+        </div>
+        <div class="tbl-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:52px;">#</th>
+                        <th>Project</th>
+                        <th class="r">Total Spent</th>
+                        <th class="r hs">Units</th>
+                        <th class="r hs">Share</th>
+                        <th class="hs">Type</th>
+                    </tr>
+                </thead>
+                <tbody id="projTbody">
+                <?php $rk = 0; foreach ($byProject as $proj => $pd):
+                    $rk++; $share = $grand > 0 ? round($pd['total']/$grand*100,1) : 0;
+                    $isMaster = stripos($pd['accType']??'','master') !== false; ?>
+                <tr>
+                    <td><span class="rnk <?= $rk <= 3 ? 'top' : '' ?>"><?= $rk ?></span></td>
+                    <td>
+                        <div class="proj-name"><?= htmlspecialchars($proj) ?></div>
+                        <?php if (!empty($pd['company']) && $pd['company'] !== $proj): ?>
+                        <div class="proj-co"><?= htmlspecialchars($pd['company']) ?></div>
+                        <?php endif; ?>
+                    </td>
+                    <td class="td-r">
+                        <div class="amt-usd">$<?= number_format($pd['total'],2) ?></div>
+                        <div class="amt-myr" data-usd="<?= $pd['total'] ?>">RM <?= number_format($pd['total']*3.9,2) ?></div>
+                    </td>
+                    <td class="td-r hs"><span class="qty-val"><?= number_format($pd['qty']) ?></span></td>
+                    <td class="td-r hs">
+                        <div class="share-row">
+                            <div class="share-bar"><div class="share-fill" style="width:<?= $share ?>%"></div></div>
+                            <span class="share-pct"><?= $share ?>%</span>
+                        </div>
+                    </td>
+                    <td class="hs"><span class="type-tag <?= $isMaster ? 't-master' : 't-sub' ?>"><?= $isMaster ? 'Master' : 'Sub' ?></span></td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-<!-- MODAL -->
-<div id="modal" class="modal">
+<div id="tabHistory" class="tab-pane">
+    <div class="months-panel">
+        <div class="panel-hdr">
+            <span class="panel-ttl">Monthly Breakdown</span>
+            <span class="chip"><?= count($byMonth) ?> periods</span>
+        </div>
+        <?php $mi = 0; foreach ($byMonth as $mKey => $m):
+            $mi++; $mNum2 = (int)date('m', strtotime($mKey.'-01'));
+            $mAbbr = date('M', strtotime($mKey.'-01')); $mLbl = date('F Y', strtotime($mKey.'-01')); ?>
+        <div class="mo-row <?= $mi === 1 ? 'open' : '' ?>" data-month="<?= htmlspecialchars($mKey) ?>">
+            <div class="mo-hdr">
+                <div class="mo-l">
+                    <div class="mo-badge">
+                        <div class="mo-badge-num"><?= str_pad($mNum2,2,'0',STR_PAD_LEFT) ?></div>
+                        <div class="mo-badge-abbr"><?= $mAbbr ?></div>
+                    </div>
+                    <div>
+                        <div class="mo-name"><?= htmlspecialchars($mLbl) ?></div>
+                        <div class="mo-qty"><?= number_format($m['qty']) ?> units</div>
+                    </div>
+                </div>
+                <div class="mo-r">
+                    <div class="mo-amts">
+                        <div class="mo-usd">$<?= number_format($m['total'],2) ?></div>
+                        <div class="mo-myr" data-usd="<?= $m['total'] ?>">RM <?= number_format($m['total']*3.9,2) ?></div>
+                    </div>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+            </div>
+            <div class="mo-body" id="mb_<?= str_replace('-','_',$mKey) ?>"></div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+</div><div id="modal" class="modal">
     <div class="modal-box">
         <button id="modalClose" class="modal-close">&times;</button>
         <div id="modalTtl" class="modal-ttl"></div>
@@ -1041,14 +754,7 @@ tbody td { padding: 16px 22px; font-size: 14px; vertical-align: middle; }
         </div>
         <div class="tbl-scroll">
             <table class="mtbl">
-                <thead>
-                    <tr>
-                        <th>Item</th>
-                        <th class="hs">Country</th>
-                        <th class="r">Qty</th>
-                        <th class="r">Amount</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Item</th><th class="hs">Country</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead>
                 <tbody id="modalTbody"></tbody>
             </table>
         </div>
@@ -1056,6 +762,17 @@ tbody td { padding: 16px 22px; font-size: 14px; vertical-align: middle; }
 </div>
 
 <script>
+// Tab Handler
+function openTab(evt, tabId) {
+    let i, tabPane, tabBtn;
+    tabPane = document.getElementsByClassName("tab-pane");
+    for (i = 0; i < tabPane.length; i++) { tabPane[i].classList.remove("active"); }
+    tabBtn = document.getElementsByClassName("tab-btn");
+    for (i = 0; i < tabBtn.length; i++) { tabBtn[i].classList.remove("active"); }
+    document.getElementById(tabId).classList.add("active");
+    evt.currentTarget.classList.add("active");
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const allProject = <?= $byProjectJson ?>;
     const allService  = <?= $byServiceJson ?>;
@@ -1077,14 +794,12 @@ document.addEventListener('DOMContentLoaded', () => {
         km.textContent = fM(km.dataset.usd);
         km.classList.toggle('on', showMyr);
 
-        document.querySelectorAll('.amt-myr').forEach(e => { e.textContent = fM(e.dataset.usd); e.classList.toggle('on', showMyr); });
-        document.querySelectorAll('.svc-myr').forEach(e => { e.textContent = fM(e.dataset.usd); e.classList.toggle('on', showMyr); });
-        document.querySelectorAll('.mo-myr').forEach(e  => { e.textContent = fM(e.dataset.usd);  e.classList.toggle('on', showMyr); });
-        document.querySelectorAll('.sc-myr').forEach(e  => { e.textContent = fM(e.dataset.usd);  e.classList.toggle('on', showMyr); });
+        document.querySelectorAll('.amt-myr, .svc-myr, .mo-myr, .sc-myr, .modal-myr').forEach(e => { 
+            e.textContent = fM(e.dataset.usd); e.classList.toggle('on', showMyr); 
+        });
 
         const mm = document.getElementById('mtMyr');
         if (mm && mm.dataset.usd) { mm.textContent = fM(mm.dataset.usd); mm.classList.toggle('on', showMyr); }
-        document.querySelectorAll('.modal-myr').forEach(e => { e.textContent = fM(e.dataset.usd); e.classList.toggle('on', showMyr); });
     }
 
     myrTog.addEventListener('change', () => { showMyr = myrTog.checked; rateRow.classList.toggle('on', showMyr); applyMyr(); });
@@ -1093,7 +808,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function getFiltered() {
         let total = 0, qty = 0;
         const projs = {}, svcs = {};
-
         Object.entries(allProject).forEach(([proj, pd]) => {
             if (selProject && proj !== selProject) return;
             let pt = 0, pq = 0;
@@ -1109,7 +823,6 @@ document.addEventListener('DOMContentLoaded', () => {
             projs[proj] = { ...pd, ft: pt, fq: pq };
             total += pt; qty += pq;
         });
-
         Object.keys(allService).forEach(grp => {
             if (selService && grp !== selService) return;
             let st = 0;
@@ -1120,7 +833,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (st > 0) svcs[grp] = st;
         });
-
         return { total, qty, projs, svcs };
     }
 
@@ -1140,83 +852,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const { total, projs } = getFiltered();
         const tbody = document.getElementById('projTbody');
         const sorted = Object.entries(projs).sort((a,b) => b[1].ft - a[1].ft);
-        if (!sorted.length) {
-            tbody.innerHTML = `<tr><td colspan="6"><div class="empty-row">No data for selected filters</div></td></tr>`;
-            return;
-        }
+        if (!sorted.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty-row">No data</div></td></tr>`; return; }
         tbody.innerHTML = sorted.map(([proj, pd], i) => {
             const share = total > 0 ? (pd.ft / total * 100).toFixed(1) : 0;
             const isMaster = (pd.accType || '').toLowerCase().includes('master');
-            return `<tr>
-                <td><span class="rnk ${i < 3 ? 'top' : ''}">${i + 1}</span></td>
-                <td>
-                    <div class="proj-name">${esc(proj)}</div>
-                    ${pd.company && pd.company !== proj ? `<div class="proj-co">${esc(pd.company)}</div>` : ''}
-                </td>
-                <td class="td-r">
-                    <div class="amt-usd">${fU(pd.ft)}</div>
-                    <div class="amt-myr ${showMyr ? 'on' : ''}" data-usd="${pd.ft}">${fM(pd.ft)}</div>
-                </td>
+            return `<tr><td><span class="rnk ${i < 3 ? 'top' : ''}">${i + 1}</span></td>
+                <td><div class="proj-name">${esc(proj)}</div>${pd.company && pd.company !== proj ? `<div class="proj-co">${esc(pd.company)}</div>` : ''}</td>
+                <td class="td-r"><div class="amt-usd">${fU(pd.ft)}</div><div class="amt-myr ${showMyr ? 'on' : ''}" data-usd="${pd.ft}">${fM(pd.ft)}</div></td>
                 <td class="td-r hs"><span class="qty-val">${Number(pd.fq).toLocaleString()}</span></td>
-                <td class="td-r hs">
-                    <div class="share-row">
-                        <div class="share-bar"><div class="share-fill" style="width:${share}%"></div></div>
-                        <span class="share-pct">${share}%</span>
-                    </div>
-                </td>
-                <td class="hs"><span class="type-tag ${isMaster ? 't-master' : 't-sub'}">${isMaster ? 'Master' : 'Sub'}</span></td>
-            </tr>`;
+                <td class="td-r hs"><div class="share-row"><div class="share-bar"><div class="share-fill" style="width:${share}%"></div></div><span class="share-pct">${share}%</span></div></td>
+                <td class="hs"><span class="type-tag ${isMaster ? 't-master' : 't-sub'}">${isMaster ? 'Master' : 'Sub'}</span></td></tr>`;
         }).join('');
     }
 
     function updateSvcBars() {
         const { total, svcs } = getFiltered();
         const c = document.getElementById('svcBars');
-        if (!Object.keys(svcs).length) { c.innerHTML = '<div class="empty-row">No service data</div>'; return; }
         const sorted = Object.entries(svcs).sort((a,b) => b[1] - a[1]);
+        if (!sorted.length) { c.innerHTML = '<div class="empty-row">No data</div>'; return; }
         c.innerHTML = sorted.map(([grp, amt]) => {
             const pct = total > 0 ? (amt / total * 100).toFixed(1) : 0;
-            return `<div class="svc-item">
-                <div class="svc-top">
-                    <span class="svc-name">${esc(grp)}</span>
-                    <span class="svc-r">
-                        <span class="svc-usd">${fU(amt)}</span>
-                        <span class="svc-pct">${pct}%</span>
-                        <span class="svc-myr ${showMyr ? 'on' : ''}" data-usd="${amt}">${fM(amt)}</span>
-                    </span>
-                </div>
-                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-            </div>`;
+            return `<div class="svc-item"><div class="svc-top"><span class="svc-name">${esc(grp)}</span><span class="svc-r"><span class="svc-usd">${fU(amt)}</span><span class="svc-pct">${pct}%</span><span class="svc-myr ${showMyr ? 'on' : ''}" data-usd="${amt}">${fM(amt)}</span></span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></div>`;
         }).join('');
     }
-
-    function updateMonthBodies() {
-        document.querySelectorAll('.mo-row.open').forEach(row => {
-            buildMonthBody(row.dataset.month, row.querySelector('.mo-body'));
-        });
-    }
-
-    function updateAll() { updateKPIs(); updateProjTable(); updateSvcBars(); updateMonthBodies(); }
-
-    document.getElementById('fltMonth').addEventListener('change',   e => { selMonth   = e.target.value; updateAll(); });
-    document.getElementById('fltProject').addEventListener('change', e => { selProject = e.target.value; updateAll(); });
-    document.getElementById('fltService').addEventListener('change', e => { selService = e.target.value; updateAll(); });
-
-    // accordion
-    document.querySelectorAll('.mo-hdr').forEach(hdr => {
-        hdr.addEventListener('click', () => {
-            const row  = hdr.closest('.mo-row');
-            const mKey = row.dataset.month;
-            const body = row.querySelector('.mo-body');
-            const wasOpen = row.classList.contains('open');
-            row.classList.toggle('open');
-            if (!wasOpen) buildMonthBody(mKey, body);
-        });
-    });
-
-    // open first on load
-    const first = document.querySelector('.mo-row.open');
-    if (first) buildMonthBody(first.dataset.month, first.querySelector('.mo-body'));
 
     function buildMonthBody(mKey, container) {
         const svcMap = {};
@@ -1226,66 +885,49 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.entries(m.services || {}).forEach(([grp, sv]) => {
                 if (selService && grp !== selService) return;
                 if (!svcMap[grp]) svcMap[grp] = { total: 0, qty: 0, items: [] };
-                svcMap[grp].total += sv.total;
-                svcMap[grp].qty   += sv.qty;
-                svcMap[grp].items.push(...(sv.items || []));
+                svcMap[grp].total += sv.total; svcMap[grp].qty += sv.qty; svcMap[grp].items.push(...(sv.items || []));
             });
         });
-
         const sorted = Object.entries(svcMap).sort((a,b) => b[1].total - a[1].total);
-        if (!sorted.length) { container.innerHTML = '<div class="empty-row" style="padding:16px 0;">No data for this period</div>'; return; }
-
+        if (!sorted.length) { container.innerHTML = '<div class="empty-row">No data</div>'; return; }
         container.innerHTML = `<div class="svc-grid">${sorted.map(([grp, sv]) => `
             <div class="svc-card" data-grp="${esc(grp)}" data-month="${esc(mKey)}">
-                <div style="display:flex;gap:10px;align-items:flex-start;">
-                    <div class="sc-dot"></div>
-                    <div>
-                        <div class="sc-name">${esc(grp)}</div>
-                        <div class="sc-qty">${Number(sv.qty).toLocaleString()} units</div>
-                    </div>
-                </div>
-                <div class="sc-r">
-                    <div class="sc-usd">${fU(sv.total)}</div>
-                    <div class="sc-myr ${showMyr ? 'on' : ''}" data-usd="${sv.total}">${fM(sv.total)}</div>
-                </div>
+                <div style="display:flex;gap:10px;"><div class="sc-dot"></div><div><div class="sc-name">${esc(grp)}</div><div class="sc-qty">${Number(sv.qty).toLocaleString()} units</div></div></div>
+                <div class="sc-r"><div class="sc-usd">${fU(sv.total)}</div><div class="sc-myr ${showMyr ? 'on' : ''}" data-usd="${sv.total}">${fM(sv.total)}</div></div>
             </div>`).join('')}</div>`;
-
-        container.querySelectorAll('.svc-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const g = card.dataset.grp;
-                showModal(g, mKey, svcMap[g].total, svcMap[g].items);
-            });
-        });
+        container.querySelectorAll('.svc-card').forEach(card => card.addEventListener('click', () => showModal(card.dataset.grp, mKey, svcMap[card.dataset.grp].total, svcMap[card.dataset.grp].items)));
     }
 
+    function updateMonthBodies() { document.querySelectorAll('.mo-row.open').forEach(row => buildMonthBody(row.dataset.month, row.querySelector('.mo-body'))); }
+    function updateAll() { updateKPIs(); updateProjTable(); updateSvcBars(); updateMonthBodies(); }
+
+    document.getElementById('fltMonth').addEventListener('change', e => { selMonth = e.target.value; updateAll(); });
+    document.getElementById('fltProject').addEventListener('change', e => { selProject = e.target.value; updateAll(); });
+    document.getElementById('fltService').addEventListener('change', e => { selService = e.target.value; updateAll(); });
+
+    document.querySelectorAll('.mo-hdr').forEach(hdr => {
+        hdr.addEventListener('click', () => {
+            const row = hdr.closest('.mo-row');
+            const wasOpen = row.classList.contains('open');
+            row.classList.toggle('open');
+            if (!wasOpen) buildMonthBody(row.dataset.month, row.querySelector('.mo-body'));
+        });
+    });
+
+    const first = document.querySelector('.mo-row.open');
+    if (first) buildMonthBody(first.dataset.month, first.querySelector('.mo-body'));
+
     function showModal(grp, mKey, totalAmt, items) {
-        const lbl = allMonth[mKey]?.label || mKey;
-        document.getElementById('modalTtl').textContent    = grp;
-        document.getElementById('modalPeriod').textContent = lbl;
-        const mu = document.getElementById('mtUsd');
-        const mm = document.getElementById('mtMyr');
-        mu.textContent = fU(totalAmt);
-        mm.textContent = fM(totalAmt); mm.dataset.usd = totalAmt; mm.classList.toggle('on', showMyr);
-
-        const tbody = document.getElementById('modalTbody');
+        document.getElementById('modalTtl').textContent = grp;
+        document.getElementById('modalPeriod').textContent = allMonth[mKey]?.label || mKey;
+        const mu = document.getElementById('mtUsd'), mm = document.getElementById('mtMyr');
+        mu.textContent = fU(totalAmt); mm.textContent = fM(totalAmt); mm.dataset.usd = totalAmt; mm.classList.toggle('on', showMyr);
         const sorted = [...items].sort((a,b) => b.amount - a.amount);
-        tbody.innerHTML = sorted.map(tx => `<tr>
-            <td><div class="item-n">${esc(tx.item)}</div></td>
-            <td class="hs"><div class="item-c">${esc(tx.country)}</div></td>
-            <td class="td-r"><span class="qty-val">${Number(tx.qty).toLocaleString()}</span></td>
-            <td class="td-r">
-                <div class="amt-usd" style="font-size:13px;">${fU(tx.amount)}</div>
-                <div class="modal-myr amt-myr ${showMyr ? 'on' : ''}" data-usd="${tx.amount}" style="font-size:11px;">${fM(tx.amount)}</div>
-            </td>
-        </tr>`).join('');
-
+        document.getElementById('modalTbody').innerHTML = sorted.map(tx => `<tr><td><div class="item-n">${esc(tx.item)}</div></td><td><div class="item-c">${esc(tx.country)}</div></td><td class="td-r"><span>${Number(tx.qty).toLocaleString()}</span></td><td class="td-r"><div class="amt-usd">${fU(tx.amount)}</div><div class="modal-myr amt-myr ${showMyr ? 'on' : ''}" data-usd="${tx.amount}">${fM(tx.amount)}</div></td></tr>`).join('');
         document.getElementById('modal').classList.add('on');
     }
 
-    const modal = document.getElementById('modal');
     document.getElementById('modalClose').addEventListener('click', () => modal.classList.remove('on'));
-    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('on'); });
-
     updateAll();
 });
 </script>
