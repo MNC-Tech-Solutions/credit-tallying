@@ -455,7 +455,6 @@ body::before {
 }
 .panel-body { padding: 20px 24px; }
 
-/* Existing detail styles kept exactly as per user prompt */
 .svc-item { margin-bottom: 18px; }
 .svc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 12px; }
 .svc-name { font-size: 13.5px; font-weight: 500; color: var(--text); }
