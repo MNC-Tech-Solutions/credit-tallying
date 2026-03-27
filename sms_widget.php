@@ -442,11 +442,6 @@ tbody td{padding:13px 18px;font-size:13.5px;vertical-align:middle;}
         </select>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
-    <!-- Search message content -->
-    <div class="search-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="searchContent" class="search-inp" placeholder="Search message content…">
-    </div>
 </div>
 
 <!-- KPIs -->
@@ -492,7 +487,6 @@ tbody td{padding:13px 18px;font-size:13.5px;vertical-align:middle;}
 <div class="tabs-bar">
     <button class="tab-btn active" data-tab="overview">Overview</button>
     <button class="tab-btn" data-tab="campaigns">Campaigns</button>
-    <button class="tab-btn" data-tab="messages">Messages</button>
     <button class="tab-btn" data-tab="monthly">Monthly</button>
 </div>
 
@@ -588,61 +582,6 @@ tbody td{padding:13px 18px;font-size:13.5px;vertical-align:middle;}
     </div>
 </div>
 
-<!-- TAB: MESSAGES -->
-<div class="tab-pane" id="tab-messages">
-    <div class="panel">
-        <div class="panel-hdr">
-            <span class="panel-ttl">All Messages</span>
-            <span class="chip" id="msgChip"><?= number_format($totalMessages) ?> messages</span>
-        </div>
-        <div class="tbl-scroll">
-            <table>
-                <thead><tr>
-                    <th>Campaign / Event</th>
-                    <th class="hs">To</th>
-                    <th class="hs">Date</th>
-                    <th>Status</th>
-                    <th class="r hs">SMS</th>
-                    <th class="hs">Carrier</th>
-                </tr></thead>
-                <tbody id="msgTbody">
-                <?php foreach (array_slice($messages, 0, 200) as $msg):
-                    $c = $statusColors[$msg['status']] ?? $defaultColor;
-                ?>
-                <tr class="msg-row"
-                    data-month="<?= htmlspecialchars($msg['monthKey']) ?>"
-                    data-status="<?= htmlspecialchars($msg['status']) ?>"
-                    data-campaign="<?= htmlspecialchars($msg['campaignKey']) ?>"
-                    data-content="<?= htmlspecialchars(strtolower($msg['content'])) ?>">
-                    <td>
-                        <div style="font-weight:600;font-size:13.5px;color:var(--text)"><?= htmlspecialchars($msg['event'] ?: '—') ?></div>
-                        <div class="msg-content"><?= htmlspecialchars($msg['content']) ?></div>
-                    </td>
-                    <td class="hs td-mono"><?= htmlspecialchars($msg['to']) ?></td>
-                    <td class="hs td-mono"><?= htmlspecialchars($msg['date']) ?></td>
-                    <td>
-                        <span class="st-pill" style="background:<?= $c['bg'] ?>;color:<?= $c['color'] ?>;border:1px solid <?= $c['border'] ?>">
-                            <span class="st-dot" style="background:<?= $c['color'] ?>"></span>
-                            <?= htmlspecialchars($msg['status']) ?>
-                        </span>
-                        <?php if (!empty($msg['reason'])): ?>
-                        <div style="font-size:11px;color:var(--text3);margin-top:3px;"><?= htmlspecialchars($msg['reason']) ?></div>
-                        <?php endif; ?>
-                    </td>
-                    <td class="td-r hs td-mono"><?= $msg['smsNum'] ?></td>
-                    <td class="hs td-mono"><?= htmlspecialchars($msg['telco']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <div id="msgPagination" style="padding:16px 24px;border-top:1px solid var(--border);font-size:13px;color:var(--text2);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-            <span id="msgCount"><?= number_format($totalMessages) ?> messages</span>
-            <span id="msgNote" style="color:var(--text3);font-size:12px;">Showing up to 200 rows. Use filters to narrow results.</span>
-        </div>
-    </div>
-</div>
-
 <!-- TAB: MONTHLY -->
 <div class="tab-pane" id="tab-monthly">
     <div class="panel" style="overflow:hidden;">
@@ -726,10 +665,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('fltStatus').addEventListener('change',   e => { selStatus   = e.target.value; updateAll(); });
     document.getElementById('fltCampaign').addEventListener('change', e => { selCampaign = e.target.value; updateAll(); });
     let searchTimer;
-    document.getElementById('searchContent').addEventListener('input', e => {
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(() => { searchText = e.target.value.toLowerCase().trim(); updateAll(); }, 280);
-    });
 
     function getFiltered() {
         return allMessages.filter(m => {
