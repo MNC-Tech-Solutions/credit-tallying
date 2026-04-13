@@ -1,4 +1,4 @@
-<!-- have individual acc and see all acc -->
+<!-- admin but old version, include demo location id to see all subaccounts -->
 
 <?php
 // Get locationId from query parameter with validation

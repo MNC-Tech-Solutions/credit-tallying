@@ -1,186 +1,119 @@
-<!-- see all acc -->
-
 <?php
-// Function to get all CSV files from a directory
+/**
+ * GHL Credits Dashboard – Admin / All Subaccounts
+ * Design: DM Sans + DM Serif Display, warm neutral palette.
+ * Fix: remaining shows negative (red) when exceeded.
+ */
+ini_set('memory_limit', '512M');
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
 function getCsvFiles($directory) {
-    $csvFiles = [];
-    if (!is_dir($directory)) {
-        error_log("Directory not found: $directory");
-        return $csvFiles;
-    }
-    $files = glob($directory . '/*.csv');
-    if (empty($files)) {
-        error_log("No CSV files found in: $directory");
-    } else {
-        $csvFiles = $files;
-    }
-    return $csvFiles;
+    if (!is_dir($directory)) return [];
+    return glob($directory . '/*.csv') ?: [];
 }
 
-// Function to read WhatsApp and Email credit limits from total_credits.csv
 function getCreditLimits($filePath) {
-    $creditLimits = [];
-    if (!file_exists($filePath)) {
-        error_log("Credit limits file not found: $filePath");
-        return $creditLimits;
-    }
+    $limits = [];
+    if (!file_exists($filePath)) return $limits;
     $file = fopen($filePath, 'r');
-    if ($file === false) {
-        error_log("Failed to open credit limits file: $filePath");
-        return $creditLimits;
-    }
+    if (!$file) return $limits;
     $header = fgetcsv($file);
-    if ($header === false) {
-        error_log("Failed to read header from credit limits file: $filePath");
-        fclose($file);
-        return $creditLimits;
-    }
+    if (!$header) { fclose($file); return $limits; }
 
-    $locationIdIndex    = false;
-    $whatsappCreditIndex = false;
-    $emailCreditIndex   = false;
-
-    foreach ($header as $index => $column) {
-        $column = strtolower(trim($column));
-        if ($column === 'locationid') $locationIdIndex = $index;
-        if ($column === 'totalamount' || $column === 'whatsappcredits') $whatsappCreditIndex = $index;
-        if ($column === 'emailcredits') $emailCreditIndex = $index;
+    $idxId = $idxWa = $idxEm = false;
+    foreach ($header as $i => $col) {
+        $col = strtolower(trim($col));
+        if ($col === 'locationid' || $col === 'location id') $idxId = $i;
+        if ($col === 'totalamount' || $col === 'whatsappcredits') $idxWa = $i;
+        if ($col === 'emailcredits') $idxEm = $i;
     }
-
-    if ($locationIdIndex === false) {
-        error_log("Required column (locationId) not found in: $filePath");
-        fclose($file);
-        return $creditLimits;
-    }
+    if ($idxId === false) { fclose($file); return $limits; }
 
     while (($row = fgetcsv($file)) !== false) {
-        if (empty($row[$locationIdIndex])) continue;
-        $locationId = trim($row[$locationIdIndex]);
-
-        $whatsappCredit = $whatsappCreditIndex !== false && isset($row[$whatsappCreditIndex]) ? floatval($row[$whatsappCreditIndex]) : 0;
-        $emailCredit    = $emailCreditIndex !== false && isset($row[$emailCreditIndex]) ? floatval($row[$emailCreditIndex]) : 0;
-
-        $creditLimits[$locationId] = [
-            'whatsappCredit' => $whatsappCredit,
-            'emailCredit'    => $emailCredit
+        if (empty($row[$idxId])) continue;
+        $locId = trim($row[$idxId]);
+        $limits[$locId] = [
+            'whatsappCredit' => $idxWa !== false ? floatval($row[$idxWa] ?? 0) : 0,
+            'emailCredit'    => $idxEm !== false ? floatval($row[$idxEm] ?? 0) : 0,
         ];
     }
     fclose($file);
-    return $creditLimits;
+    return $limits;
 }
 
-// Function to process CSV files and gather location, type, and monthly data
 function processCsvFiles($csvFiles) {
     $results = [];
     foreach ($csvFiles as $filePath) {
         if (basename($filePath) === 'total_credits.csv') continue;
-        if (!file_exists($filePath)) {
-            error_log("File not found: $filePath");
-            continue;
-        }
+        if (!file_exists($filePath)) continue;
         $file = fopen($filePath, 'r');
-        if ($file === false) {
-            error_log("Failed to open file: $filePath");
-            continue;
-        }
+        if (!$file) continue;
         $header = fgetcsv($file);
-        if ($header === false) {
-            error_log("Failed to read header from: $filePath");
-            fclose($file);
-            continue;
-        }
+        if (!$header) { fclose($file); continue; }
 
-        $locationIdIndex   = false;
-        $locationNameIndex = false;
-        $typeIndex         = false;
-        $amountIndex       = false;
-        $dateIndex         = false;
-        $descriptionIndex  = false;
-
-        foreach ($header as $index => $column) {
-            $column = strtolower(trim($column));
-            if ($column === 'locationid' || $column === 'location id') $locationIdIndex = $index;
-            if ($column === 'locationname' || $column === 'location name') $locationNameIndex = $index;
-            if ($column === 'type' || $column === 'transaction type') $typeIndex = $index;
-            if ($column === 'amount') $amountIndex = $index;
-            if ($column === 'date' || $column === 'activity date') $dateIndex = $index;
-            if ($column === 'description') $descriptionIndex = $index;
+        $idxId = $idxName = $idxType = $idxAmt = $idxDate = $idxDesc = false;
+        foreach ($header as $i => $col) {
+            $col = strtolower(trim($col));
+            if ($col === 'locationid'   || $col === 'location id')   $idxId   = $i;
+            if ($col === 'locationname' || $col === 'location name') $idxName = $i;
+            if ($col === 'type'         || $col === 'transaction type') $idxType = $i;
+            if ($col === 'amount')       $idxAmt  = $i;
+            if ($col === 'date'         || $col === 'activity date') $idxDate = $i;
+            if ($col === 'description')  $idxDesc = $i;
         }
-
-        if ($locationIdIndex === false || $amountIndex === false || $typeIndex === false) {
-            error_log("Required columns (locationId, type, or amount) not found in: $filePath");
-            fclose($file);
-            continue;
-        }
+        if ($idxId === false || $idxAmt === false || $idxType === false) { fclose($file); continue; }
 
         while (($row = fgetcsv($file)) !== false) {
-            if (empty($row[$locationIdIndex]) || !isset($row[$amountIndex]) || empty($row[$typeIndex])) continue;
-            $locationId  = trim($row[$locationIdIndex]);
-            $type        = trim($row[$typeIndex]);
-            $description = $descriptionIndex !== false && isset($row[$descriptionIndex]) ? strtolower(trim($row[$descriptionIndex])) : '';
+            if (empty($row[$idxId]) || !isset($row[$idxAmt]) || empty($row[$idxType])) continue;
+            $locId = trim($row[$idxId]);
+            $type  = trim($row[$idxType]);
+            $desc  = $idxDesc !== false ? strtolower(trim($row[$idxDesc] ?? '')) : '';
 
-            if (stripos($type, 'WhatsApp') !== false || stripos($description, 'whatsapp') !== false) {
-                $category    = 'whatsapp';
-                $creditAmount = 0.50;
-            } elseif (stripos($type, 'Emails') !== false || stripos($description, 'emails') !== false) {
-                $category    = 'email';
-                $creditAmount = 0.005;
+            if (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
+                $cat = 'whatsapp'; $cost = 0.50;
+            } elseif (stripos($type, 'Emails') !== false || stripos($desc, 'emails') !== false) {
+                $cat = 'email'; $cost = 0.005;
             } else {
                 continue;
             }
 
-            $locationName = $locationNameIndex !== false && !empty($row[$locationNameIndex]) ? trim($row[$locationNameIndex]) : $locationId;
+            $locName = $idxName !== false && !empty($row[$idxName]) ? trim($row[$idxName]) : $locId;
 
-            if (!isset($results[$locationId])) {
-                $results[$locationId] = [
-                    'locationName'   => $locationName,
-                    'emailAmount'    => 0,
-                    'whatsappAmount' => 0,
-                    'emailCount'     => 0,
-                    'whatsappCount'  => 0,
-                    'types'          => [],
-                    'monthlyData'    => []
+            if (!isset($results[$locId])) {
+                $results[$locId] = [
+                    'locationName'   => $locName,
+                    'emailAmount'    => 0, 'whatsappAmount' => 0,
+                    'emailCount'     => 0, 'whatsappCount'  => 0,
+                    'monthlyData'    => [],
                 ];
             }
 
-            if (!isset($results[$locationId]['types'][$type])) {
-                $results[$locationId]['types'][$type] = ['totalAmount' => 0, 'count' => 0, 'category' => $category];
+            if ($cat === 'email') {
+                $results[$locId]['emailAmount']   += $cost;
+                $results[$locId]['emailCount']++;
+            } else {
+                $results[$locId]['whatsappAmount'] += $cost;
+                $results[$locId]['whatsappCount']++;
             }
 
-            if ($category === 'email') {
-                $results[$locationId]['emailAmount'] += $creditAmount;
-                $results[$locationId]['emailCount']++;
-            } elseif ($category === 'whatsapp') {
-                $results[$locationId]['whatsappAmount'] += $creditAmount;
-                $results[$locationId]['whatsappCount']++;
-            }
-
-            $results[$locationId]['types'][$type]['totalAmount'] += $creditAmount;
-            $results[$locationId]['types'][$type]['count']++;
-
-            if ($dateIndex !== false && !empty($row[$dateIndex])) {
-                $dateStr = preg_replace('/(st|nd|rd|th)/', '', $row[$dateIndex]);
-                $date    = DateTime::createFromFormat('M j Y, h:i:s A', trim($dateStr));
-                if ($date !== false) {
-                    $monthKey = $date->format('Y-m');
-                    if (!isset($results[$locationId]['monthlyData'][$monthKey])) {
-                        $results[$locationId]['monthlyData'][$monthKey] = ['types' => []];
-                    }
-                    if (!isset($results[$locationId]['monthlyData'][$monthKey]['types'][$category])) {
-                        $results[$locationId]['monthlyData'][$monthKey]['types'][$category] = [
-                            'totalAmount' => 0, 'count' => 0, 'transactions' => []
-                        ];
-                    }
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['totalAmount'] += $creditAmount;
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['count']++;
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['transactions'][] = [
-                        'date'         => $row[$dateIndex],
-                        'amount'       => $creditAmount,
+            // Monthly aggregation — includes full transaction list for modal detail view
+            if ($idxDate !== false && !empty($row[$idxDate])) {
+                $ds   = preg_replace('/(st|nd|rd|th)/', '', $row[$idxDate]);
+                $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($ds));
+                if ($date) {
+                    $mk = $date->format('Y-m');
+                    if (!isset($results[$locId]['monthlyData'][$mk]))
+                        $results[$locId]['monthlyData'][$mk] = ['types' => []];
+                    if (!isset($results[$locId]['monthlyData'][$mk]['types'][$cat]))
+                        $results[$locId]['monthlyData'][$mk]['types'][$cat] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
+                    $results[$locId]['monthlyData'][$mk]['types'][$cat]['totalAmount'] += $cost;
+                    $results[$locId]['monthlyData'][$mk]['types'][$cat]['count']++;
+                    $results[$locId]['monthlyData'][$mk]['types'][$cat]['transactions'][] = [
+                        'date'         => $row[$idxDate],
+                        'amount'       => $cost,
                         'originalType' => $type,
-                        'description'  => $descriptionIndex !== false && isset($row[$descriptionIndex]) ? $row[$descriptionIndex] : ''
                     ];
-                } else {
-                    error_log("Invalid date format in $filePath: " . $row[$dateIndex]);
                 }
             }
         }
@@ -189,122 +122,98 @@ function processCsvFiles($csvFiles) {
     return $results;
 }
 
-// Process the CSV files
-$csvDirectory    = __DIR__ . '/csv_files';
+function displayError($msg) {
+    die("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><link href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=DM+Serif+Display&display=swap' rel='stylesheet'></head><body style='background:#f5f4f1;font-family:DM Sans,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;'><div style='background:#fff;border:1px solid #e8e5e0;border-radius:20px;padding:48px 40px;text-align:center;max-width:420px;box-shadow:0 4px 16px rgba(0,0,0,0.07);'><div style='font-size:40px;margin-bottom:12px;'>⚠️</div><h2 style='font-family:DM Serif Display,serif;color:#1a1916;margin:0 0 8px;font-size:22px;'>$msg</h2></div></body></html>");
+}
+
+// ─── Main Processing ─────────────────────────────────────────────────────────
+
+$csvDirectory     = __DIR__ . '/csv_files';
 $creditLimitsFile = __DIR__ . '/total_credits.csv';
-$csvFiles        = getCsvFiles($csvDirectory);
-$creditLimits    = getCreditLimits($creditLimitsFile);
-$processedData   = processCsvFiles($csvFiles);
 
-if (empty($processedData)) {
-    echo <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GHL Credits Dashboard</title>
-</head>
-<body>
-    <div style="text-align: center; padding: 20px;">
-        <h2>No valid data found.</h2>
-    </div>
-</body>
-</html>
-HTML;
-    exit;
-}
+$csvFiles      = getCsvFiles($csvDirectory);
+$creditLimits  = getCreditLimits($creditLimitsFile);
+$processedData = processCsvFiles($csvFiles);
 
-// Build subaccount data
-$subaccountData = [];
+if (empty($processedData)) displayError("No valid data found. Please check the csv_files folder.");
 
-// Aggregate "All Subaccounts" totals
-$totalEmailUsedRm    = 0;
-$totalWhatsappUsedRm = 0;
-$totalWhatsappCredit = 0;
-$totalEmailCredit    = 0;
-$allTypes            = [];
+// ─── Build Subaccount Data ────────────────────────────────────────────────────
 
-foreach ($processedData as $locationId => $data) {
-    $totalEmailUsedRm    += $data['emailAmount'];
-    $totalWhatsappUsedRm += $data['whatsappAmount'];
-    $totalWhatsappCredit += isset($creditLimits[$locationId]['whatsappCredit']) ? $creditLimits[$locationId]['whatsappCredit'] : 0;
-    $totalEmailCredit    += isset($creditLimits[$locationId]['emailCredit']) ? $creditLimits[$locationId]['emailCredit'] : 0;
-
-    foreach ($data['types'] as $type => $typeData) {
-        if (!isset($allTypes[$type])) {
-            $allTypes[$type] = ['totalAmount' => 0, 'count' => 0, 'category' => $typeData['category']];
-        }
-        $allTypes[$type]['totalAmount'] += $typeData['totalAmount'];
-        $allTypes[$type]['count']       += $typeData['count'];
-    }
-}
-
-$whatsappAmountAll        = $totalWhatsappCredit / 2;
-$emailAmountAll           = $totalEmailCredit * 0.005;
-$whatsappUsedCreditAll    = $totalWhatsappUsedRm / 0.50;
-$emailUsedCreditAll       = $totalEmailUsedRm / 0.005;
-$whatsappRemainingAll     = max(0, $whatsappAmountAll - $totalWhatsappUsedRm);
-$emailRemainingAll        = max(0, $emailAmountAll - $totalEmailUsedRm);
-$whatsappRemainingCredit  = $totalWhatsappCredit - $whatsappUsedCreditAll;
-$emailRemainingCredit     = max(0, $totalEmailCredit - $emailUsedCreditAll);
-
-$subaccountData[''] = [
-    'emailAmount'             => $emailAmountAll,
-    'whatsappAmount'          => $whatsappAmountAll,
-    'emailUsedAmount'         => $totalEmailUsedRm,
-    'whatsappUsedAmount'      => $totalWhatsappUsedRm,
-    'emailRemainingAmount'    => $emailRemainingAll,
-    'whatsappRemainingAmount' => $whatsappRemainingAll,
-    'emailCredit'             => $totalEmailCredit,
-    'whatsappCredit'          => $totalWhatsappCredit,
-    'emailUsedCredit'         => $emailUsedCreditAll,
-    'whatsappUsedCredit'      => $whatsappUsedCreditAll,
-    'emailRemainingCredit'    => $emailRemainingCredit,
-    'whatsappRemainingCredit' => $whatsappRemainingCredit,
-    'emailPercent'            => $emailAmountAll > 0 ? min(100, round($totalEmailUsedRm / $emailAmountAll * 100)) : 0,
-    'whatsappPercent'         => $whatsappAmountAll > 0 ? min(100, round($totalWhatsappUsedRm / $whatsappAmountAll * 100)) : 0,
-    'emailMax'                => $emailAmountAll,
-    'whatsappMax'             => $whatsappAmountAll,
-    'types'                   => $allTypes
-];
-
-// Individual subaccounts
-foreach ($processedData as $locationId => $data) {
-    $emailUsedAmountRm    = $data['emailAmount'];
-    $whatsappUsedAmountRm = $data['whatsappAmount'];
-    $whatsappCredit       = isset($creditLimits[$locationId]['whatsappCredit']) ? $creditLimits[$locationId]['whatsappCredit'] : 0;
-    $emailCredit          = isset($creditLimits[$locationId]['emailCredit']) ? $creditLimits[$locationId]['emailCredit'] : 0;
-    $whatsappAmountRm     = $whatsappCredit / 2;
-    $emailAmountRm        = $emailCredit * 0.005;
-    $emailUsedCredit      = $emailUsedAmountRm / 0.005;
-    $whatsappUsedCredit   = $whatsappUsedAmountRm / 0.50;
-
-    $subaccountData[$locationId] = [
-        'emailAmount'             => $emailAmountRm,
-        'whatsappAmount'          => $whatsappAmountRm,
-        'emailUsedAmount'         => $emailUsedAmountRm,
-        'whatsappUsedAmount'      => $whatsappUsedAmountRm,
-        'emailRemainingAmount'    => max(0, $emailAmountRm - $emailUsedAmountRm),
-        'whatsappRemainingAmount' => max(0, $whatsappAmountRm - $whatsappUsedAmountRm),
-        'emailCredit'             => $emailCredit,
-        'whatsappCredit'          => $whatsappCredit,
-        'emailUsedCredit'         => $emailUsedCredit,
-        'whatsappUsedCredit'      => $whatsappUsedCredit,
-        'emailRemainingCredit'    => max(0, $emailCredit - $emailUsedCredit),
-        'whatsappRemainingCredit' => $whatsappCredit - $whatsappUsedCredit,
-        'emailPercent'            => $emailAmountRm > 0 ? min(100, round($emailUsedAmountRm / $emailAmountRm * 100)) : 0,
-        'whatsappPercent'         => $whatsappAmountRm > 0 ? min(100, round($whatsappUsedAmountRm / $whatsappAmountRm * 100)) : 0,
-        'emailMax'                => $emailAmountRm,
-        'whatsappMax'             => $whatsappAmountRm,
-        'name'                    => $data['locationName'],
-        'types'                   => $data['types'],
-        'monthlyData'             => $data['monthlyData']
+// Helper: build one subaccount record (allows negative remaining)
+function buildRecord($waCredit, $emCredit, $waUsedRm, $emUsedRm) {
+    $waMaxRm = $waCredit / 2;
+    $emMaxRm = $emCredit * 0.005;
+    $waUsedC = $waUsedRm / 0.50;
+    $emUsedC = $emUsedRm / 0.005;
+    return [
+        'whatsappCredit'          => $waCredit,
+        'emailCredit'             => $emCredit,
+        'whatsappUsedCredit'      => $waUsedC,
+        'emailUsedCredit'         => $emUsedC,
+        'whatsappRemainingCredit' => $waCredit - $waUsedC,   // may be negative
+        'emailRemainingCredit'    => $emCredit - $emUsedC,
+        'whatsappAmount'          => $waMaxRm,
+        'emailAmount'             => $emMaxRm,
+        'whatsappUsedAmount'      => $waUsedRm,
+        'emailUsedAmount'         => $emUsedRm,
+        'whatsappRemainingAmount' => $waMaxRm - $waUsedRm,   // may be negative
+        'emailRemainingAmount'    => $emMaxRm - $emUsedRm,
+        'whatsappPercent'         => $waMaxRm > 0 ? min(100, round($waUsedRm / $waMaxRm * 100)) : 0,
+        'emailPercent'            => $emMaxRm > 0 ? min(100, round($emUsedRm / $emMaxRm * 100)) : 0,
     ];
 }
 
-$initialData       = $subaccountData[''];
+$subaccountData = [];
+
+// All-Subaccounts aggregate
+$totWaCredit = $totEmCredit = $totWaUsed = $totEmUsed = 0;
+foreach ($processedData as $locId => $data) {
+    $totWaCredit += $creditLimits[$locId]['whatsappCredit'] ?? 0;
+    $totEmCredit += $creditLimits[$locId]['emailCredit']    ?? 0;
+    $totWaUsed   += $data['whatsappAmount'];
+    $totEmUsed   += $data['emailAmount'];
+}
+$subaccountData[''] = array_merge(buildRecord($totWaCredit, $totEmCredit, $totWaUsed, $totEmUsed), [
+    'name'        => 'All Subaccounts',
+    'monthlyData' => [],
+]);
+
+// Individual subaccounts
+foreach ($processedData as $locId => $data) {
+    $waC = $creditLimits[$locId]['whatsappCredit'] ?? 0;
+    $emC = $creditLimits[$locId]['emailCredit']    ?? 0;
+    $subaccountData[$locId] = array_merge(
+        buildRecord($waC, $emC, $data['whatsappAmount'], $data['emailAmount']),
+        [
+            'name'        => $data['locationName'],
+            'monthlyData' => $data['monthlyData'],
+            'waCount'     => $data['whatsappCount'],
+            'emCount'     => $data['emailCount'],
+        ]
+    );
+}
+
+$initialData        = $subaccountData[''];
 $subaccountDataJson = json_encode($subaccountData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+
+// Subaccount rows for PHP-rendered table
+$subRows = [];
+foreach ($processedData as $locId => $data) {
+    $d = $subaccountData[$locId];
+    $subRows[] = [
+        'id'        => $locId,
+        'name'      => $data['locationName'],
+        'waUsed'    => $data['whatsappAmount'],
+        'emUsed'    => $data['emailAmount'],
+        'waCount'   => $data['whatsappCount'],
+        'emCount'   => $data['emailCount'],
+        'waPct'     => $d['whatsappPercent'],
+        'emPct'     => $d['emailPercent'],
+        'waRem'     => $d['whatsappRemainingCredit'],
+        'emRem'     => $d['emailRemainingCredit'],
+    ];
+}
+usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + $a['emUsed']));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -312,654 +221,694 @@ $subaccountDataJson = json_encode($subaccountData, JSON_HEX_TAG | JSON_HEX_APOS 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GHL Credits Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
     <style>
     :root {
-        --ghl-whatsapp: #25D366;
-        --ghl-whatsapp-light: #4ADE80;
-        --ghl-email: #3B82F6;
-        --ghl-email-light: #60A5FA;
-        --ghl-dark: #2d3748;
-        --ghl-gray: #718096;
-        --ghl-light-gray: #f7fafc;
-        --ghl-border: #e2e8f0;
-        --ghl-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-        --ghl-tab-active: #e2e8f0;
+        --bg:          #f5f4f1;
+        --surface:     #faf9f7;
+        --card:        #ffffff;
+        --border:      #e8e5e0;
+        --border2:     #d6d2cb;
+        --wa:          #25D366;
+        --wa-light:    #1db954;
+        --wa-soft:     rgba(37,211,102,0.09);
+        --em:          #1e6fa8;
+        --em-light:    #3b82f6;
+        --em-soft:     rgba(30,111,168,0.09);
+        --accent:      #7c3aed;
+        --accent-soft: rgba(124,58,237,0.08);
+        --danger:      #dc2626;
+        --danger-soft: rgba(220,38,38,0.08);
+        --danger-mid:  rgba(220,38,38,0.18);
+        --text:        #1a1916;
+        --text2:       #6b6760;
+        --text3:       #b0aca5;
+        --r:    20px;
+        --r-sm: 12px;
+        --r-xs: 8px;
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+        --shadow-md: 0 4px 16px rgba(0,0,0,0.07),0 1px 4px rgba(0,0,0,0.04);
+        --shadow-xl: 0 24px 60px rgba(0,0,0,0.12),0 4px 16px rgba(0,0,0,0.06);
     }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px;line-height:1.6;font-size:15px;}
+    body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+        background:radial-gradient(ellipse 70% 50% at 10% 0%,rgba(37,211,102,0.04) 0%,transparent 60%),
+                   radial-gradient(ellipse 50% 40% at 90% 100%,rgba(30,111,168,0.03) 0%,transparent 60%);}
+    .wrap{max-width:1100px;margin:0 auto;padding:0 28px;position:relative;z-index:1;}
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* ── TOPBAR ── */
+    .topbar{display:flex;align-items:center;justify-content:space-between;padding:32px 0 28px;margin-bottom:28px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:16px;}
+    .brand{display:flex;align-items:center;gap:14px;}
+    .brand-icon{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,var(--wa),var(--wa-light));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,211,102,0.28);flex-shrink:0;}
+    .brand-icon svg{width:22px;height:22px;}
+    .brand-name{font-family:'DM Serif Display',serif;font-size:21px;color:var(--text);letter-spacing:-0.3px;}
+    .brand-sub{font-size:12px;color:var(--text2);margin-top:1px;}
 
-    body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        background: #f1f5f9;
-        min-height: 100vh;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 20px;
-    }
+    /* Subaccount selector */
+    .sel-wrap{position:relative;min-width:280px;}
+    .sel-wrap svg.arr{position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text3);width:14px;height:14px;}
+    .sub-sel{width:100%;padding:11px 44px 11px 16px;font-size:14px;font-family:'DM Sans',sans-serif;font-weight:500;color:var(--text);background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;appearance:none;outline:none;transition:.2s;box-shadow:var(--shadow-sm);}
+    .sub-sel:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
 
-    .ghl-dashboard {
-        width: 100%;
-        max-width: 1200px;
-        background: white;
-        border-radius: 16px;
-        box-shadow: var(--ghl-card-shadow);
-        overflow: hidden;
-    }
+    /* ── USAGE CARDS ── */
+    .usage-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+    .ucard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow-sm);transition:transform .2s,box-shadow .2s;animation:fadeUp .5s ease both;}
+    .ucard:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
+    .ucard::before{content:'';display:block;height:4px;}
+    .ucard.wa::before{background:linear-gradient(90deg,var(--wa),var(--wa-light));}
+    .ucard.em::before{background:linear-gradient(90deg,var(--em),var(--em-light));}
+    .ucard:nth-child(1){animation-delay:.05s}
+    .ucard:nth-child(2){animation-delay:.12s}
+    .ucard-inner{padding:26px 28px;}
 
-    .ghl-header {
-        background: white;
-        padding: 24px;
-        border-bottom: 1px solid var(--ghl-border);
-    }
+    /* Card head */
+    .ucard-head{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
+    .ucard-ico{width:40px;height:40px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .ucard.wa .ucard-ico{background:var(--wa-soft);}
+    .ucard.em .ucard-ico{background:var(--em-soft);}
+    .ucard-ico svg{width:19px;height:19px;}
+    .ucard-ttl{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text);}
+    .ucard-pct{font-size:12px;font-weight:700;padding:3px 11px;border-radius:999px;margin-left:auto;}
+    .ucard.wa .ucard-pct{background:var(--wa-soft);color:var(--wa);}
+    .ucard.em .ucard-pct{background:var(--em-soft);color:var(--em);}
+    .ucard-pct.exceeded{background:var(--danger-soft)!important;color:var(--danger)!important;}
 
-    .ghl-header-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-    }
+    /* Progress */
+    .prog-wrap{margin:0 0 20px;}
+    .prog-labels-top{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;}
+    .prog-track{height:10px;background:var(--bg);border-radius:999px;overflow:hidden;border:1px solid var(--border);}
+    .prog-fill{height:100%;border-radius:999px;transition:width 1.2s cubic-bezier(.22,1,.36,1);}
+    .ucard.wa .prog-fill{background:linear-gradient(90deg,var(--wa),var(--wa-light));}
+    .ucard.em .prog-fill{background:linear-gradient(90deg,var(--em),var(--em-light));}
+    .prog-fill.exceeded{background:linear-gradient(90deg,var(--danger),#ef4444)!important;}
+    .prog-midmarks{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:5px;}
 
-    .ghl-title { font-size: 26px; font-weight: 700; color: var(--ghl-dark); }
+    /* Tabs */
+    .utabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:4px;margin-bottom:18px;}
+    .utab{flex:1;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text2);background:transparent;border:none;border-radius:9px;cursor:pointer;transition:background .18s,color .18s;font-family:'DM Sans',sans-serif;text-align:center;}
+    .utab:hover{color:var(--text);background:var(--bg);}
+    .utab.active{color:#fff;}
+    .ucard.wa .utab.active{background:var(--wa);}
+    .ucard.em .utab.active{background:var(--em);}
 
-    .ghl-logo {
-        width: 40px; height: 40px;
-        background: var(--ghl-light-gray);
-        border-radius: 8px;
-        display: flex; align-items: center; justify-content: center;
-    }
+    /* Metric panes */
+    .metrics-pane{display:none;}
+    .metrics-pane.active{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+    .metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;}
+    .metric-lbl{font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);margin-bottom:4px;}
+    .metric-val{font-family:'DM Serif Display',serif;font-size:19px;color:var(--text);letter-spacing:-.3px;}
+    .metric-val.exceeded{color:var(--danger);}
+    .metric-sub{font-size:11px;color:var(--text3);margin-top:3px;}
+    .metric.exceeded-tile{border-color:var(--danger-mid);background:var(--danger-soft);}
 
-    .ghl-logo svg { width: 24px; height: 24px; color: var(--ghl-dark); }
+    /* ── SUBACCOUNTS PANEL ── */
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow-sm);margin-bottom:20px;animation:fadeUp .5s .18s ease both;}
+    .panel-hdr{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;transition:background .15s;}
+    .panel-hdr:hover{background:var(--surface);}
+    .panel-hdr-l{display:flex;align-items:center;gap:12px;}
+    .panel-ttl{font-family:'DM Serif Display',serif;font-size:17px;color:var(--text);}
+    .chip{font-size:11px;font-weight:600;padding:4px 12px;border-radius:999px;background:var(--bg);color:var(--text2);border:1px solid var(--border);}
+    .chevron{width:18px;height:18px;color:var(--text3);transition:transform .25s;flex-shrink:0;}
+    .panel.open .chevron{transform:rotate(180deg);}
+    .panel-body{display:none;padding:0;}
+    .panel.open .panel-body{display:block;}
 
-    .ghl-content {
-        padding: 24px;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 24px;
-    }
+    /* Subaccounts table */
+    .tbl-scroll{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;}
+    thead tr{background:var(--bg);}
+    thead th{padding:12px 20px;font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+    th.r,td.r{text-align:right;}
+    tbody tr{border-bottom:1px solid var(--border);transition:background .12s;cursor:pointer;}
+    tbody tr:last-child{border-bottom:none;}
+    tbody tr:hover{background:var(--accent-soft);}
+    tbody td{padding:14px 20px;font-size:14px;vertical-align:middle;}
+    .td-name{font-weight:600;color:var(--text);}
+    .td-id{font-size:11.5px;color:var(--text3);margin-top:2px;}
+    .td-amt{font-weight:700;font-variant-numeric:tabular-nums;}
+    .td-amt.wa{color:var(--wa);}
+    .td-amt.em{color:var(--em);}
+    .td-cnt{color:var(--text2);font-size:13px;}
 
-    .ghl-card {
-        background: white;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        border: 1px solid var(--ghl-border);
-    }
+    /* Mini bar */
+    .mini-bar-wrap{display:flex;align-items:center;gap:8px;min-width:90px;}
+    .mini-bar{flex:1;height:5px;background:var(--bg);border-radius:999px;overflow:hidden;border:1px solid var(--border);}
+    .mini-fill{height:100%;border-radius:999px;}
+    .mini-fill.wa{background:var(--wa);}
+    .mini-fill.em{background:var(--em);}
+    .mini-fill.exceeded{background:var(--danger)!important;}
+    .mini-pct{font-size:11px;font-weight:600;color:var(--text2);min-width:32px;text-align:right;}
+    .mini-pct.exceeded{color:var(--danger);}
 
-    .ghl-card.whatsapp { border-left: 4px solid var(--ghl-whatsapp); }
-    .ghl-card.email    { border-left: 4px solid var(--ghl-email); }
+    /* Status pill */
+    .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;}
+    .pill-active{background:var(--wa-soft);color:var(--wa);border:1px solid rgba(37,211,102,.2);}
+    .pill-inactive{background:var(--bg);color:var(--text3);border:1px solid var(--border);}
+    .pdot{width:6px;height:6px;border-radius:50%;}
+    .pdot-active{background:var(--wa);}
+    .pdot-inactive{background:var(--border2);}
 
-    .ghl-card-title { font-size: 20px; font-weight: 600; color: var(--ghl-dark); margin-bottom: 20px; }
+    /* ── MODAL ── */
+    .modal{display:none;position:fixed;inset:0;background:rgba(26,25,22,.45);backdrop-filter:blur(10px);z-index:9999;align-items:center;justify-content:center;padding:24px;}
+    .modal.on{display:flex;}
+    .modal-box{background:var(--card);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:760px;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-xl);position:relative;animation:fadeUp .22s ease;}
+    .modal-head{padding:26px 28px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:16px;position:sticky;top:0;background:var(--card);z-index:1;}
+    .modal-ttl{font-family:'DM Serif Display',serif;font-size:20px;color:var(--text);}
+    .modal-meta{font-size:13px;color:var(--text2);margin-top:4px;}
+    .modal-close{width:34px;height:34px;border-radius:var(--r-xs);border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;line-height:1;flex-shrink:0;}
+    .modal-close:hover{background:var(--accent-soft);border-color:rgba(124,58,237,.2);color:var(--accent);}
+    .modal-body{padding:24px 28px 28px;}
+    .modal-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+    .mkpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;}
+    .mkpi-lbl{font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);margin-bottom:4px;}
+    .mkpi-val{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text);}
+    .mkpi-val.exceeded{color:var(--danger);}
+    .mkpi.exceeded-tile{background:var(--danger-soft);border-color:var(--danger-mid);}
+    .mo-section{margin-top:20px;}
+    .mo-ttl{font-family:'DM Serif Display',serif;font-size:15px;color:var(--text);margin-bottom:10px;}
+    .mo-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .mo-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;}
+    .mo-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;}
+    .mo-cats{display:flex;gap:8px;flex-wrap:wrap;}
+    .mo-cat{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;}
+    .mo-cat.wa{background:var(--wa-soft);color:var(--wa);}
+    .mo-cat.em{background:var(--em-soft);color:var(--em);}
+    .mo-empty{text-align:center;padding:24px;color:var(--text3);font-size:14px;}
 
-    .ghl-tabs {
-        display: flex;
-        margin-bottom: 20px;
-        border-bottom: 1px solid var(--ghl-border);
-    }
+    @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+    ::-webkit-scrollbar{width:5px;height:5px;}
+    ::-webkit-scrollbar-track{background:transparent;}
+    ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:999px;}
 
-    .ghl-tab {
-        padding: 10px 20px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--ghl-gray);
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
+    /* ── MONTHLY TILES (individual mode) ── */
+    .mo-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .mo-tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:18px 20px;cursor:pointer;transition:background .15s,box-shadow .15s,transform .15s;display:flex;justify-content:space-between;align-items:center;gap:12px;}
+    .mo-tile:hover{background:var(--card);box-shadow:var(--shadow-md);transform:translateY(-2px);}
+    .dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;}
+    .dot.wa{background:var(--wa);}
+    .dot.em{background:var(--em);}
+    .mo-tile-cat{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+    .mo-tile-cat.wa{color:var(--wa);}
+    .mo-tile-cat.em{color:var(--em);}
+    .mo-tile-amt{font-family:'DM Serif Display',serif;font-size:22px;color:var(--text);}
+    .mo-tile-cnt{font-size:12px;color:var(--text2);margin-top:3px;}
+    .mo-tile-arrow{width:32px;height:32px;border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;border:1px solid var(--border);color:var(--text3);flex-shrink:0;transition:background .15s,color .15s,border-color .15s;}
+    .mo-tile:hover .mo-tile-arrow{background:var(--accent-soft);border-color:rgba(124,58,237,.2);color:var(--accent);}
+    .mo-tile-arrow svg{width:14px;height:14px;}
+    /* modal cat label */
+    .modal-cat{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+    .modal-cat.wa{color:var(--wa);}
+    .modal-cat.em{color:var(--em);}
 
-    .ghl-tab.active          { color: var(--ghl-dark); background: var(--ghl-tab-active); }
-    .ghl-tab.whatsapp.active { border-bottom: 2px solid var(--ghl-whatsapp); }
-    .ghl-tab.email.active    { border-bottom: 2px solid var(--ghl-email); }
-    .ghl-tab:hover           { color: var(--ghl-dark); }
-    .ghl-tab svg             { width: 16px; height: 16px; }
-
-    .ghl-metric {
-        margin-bottom: 16px;
-        background: var(--ghl-light-gray);
-        padding: 12px;
-        border-radius: 8px;
-    }
-
-    .ghl-metric-label { font-size: 13px; color: var(--ghl-gray); text-transform: uppercase; margin-bottom: 6px; }
-    .ghl-metric-value { font-size: 22px; font-weight: 700; color: var(--ghl-dark); }
-
-    .ghl-progress-section  { margin-bottom: 20px; position: relative; }
-    .ghl-progress-header   { display: flex; justify-content: space-between; margin-bottom: 8px; }
-    .ghl-progress-title    { font-size: 14px; font-weight: 600; color: var(--ghl-dark); }
-    .ghl-progress-percent  { font-size: 14px; font-weight: 600; }
-    .ghl-progress-percent.whatsapp { color: var(--ghl-whatsapp); }
-    .ghl-progress-percent.email    { color: var(--ghl-email); }
-
-    .ghl-progress-bar { height: 10px; background: var(--ghl-light-gray); border-radius: 5px; overflow: hidden; }
-
-    .ghl-progress-fill {
-        height: 100%; border-radius: 5px; width: 0;
-        transition: width 0.6s cubic-bezier(0.65, 0, 0.35, 1);
-    }
-
-    .ghl-progress-fill.whatsapp { background: linear-gradient(90deg, var(--ghl-whatsapp), var(--ghl-whatsapp-light)); }
-    .ghl-progress-fill.email    { background: linear-gradient(90deg, var(--ghl-email), var(--ghl-email-light)); }
-
-    .ghl-progress-tooltip {
-        visibility: hidden;
-        position: absolute;
-        top: -30px; left: 50%;
-        transform: translateX(-50%);
-        background: var(--ghl-dark);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 6px;
-        font-size: 12px;
-        white-space: nowrap;
-    }
-
-    .ghl-progress-section:hover .ghl-progress-tooltip { visibility: visible; }
-
-    .ghl-progress-labels {
-        display: flex;
-        justify-content: space-between;
-        font-size: 12px;
-        color: var(--ghl-gray);
-        margin-top: 6px;
-    }
-
-    .ghl-subaccount-select {
-        width: 100%;
-        padding: 12px 16px;
-        border-radius: 8px;
-        border: 1px solid var(--ghl-border);
-        background: white;
-        font-size: 16px;
-        color: var(--ghl-dark);
-        margin-bottom: 16px;
-        cursor: pointer;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%232d3748'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 16px center;
-        background-size: 20px;
-    }
-
-    .ghl-subaccount-select:focus {
-        outline: none;
-        border-color: var(--ghl-whatsapp);
-        box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.2);
-    }
-
-    .ghl-subaccount-select option { color: var(--ghl-dark); background: white; }
-
-    .ghl-subaccounts-toggle {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px;
-        cursor: pointer;
-        background: var(--ghl-light-gray);
-        border-radius: 8px;
-        margin-bottom: 16px;
-    }
-
-    .ghl-subaccounts-toggle svg { width: 18px; height: 18px; color: var(--ghl-dark); transition: transform 0.3s ease; }
-
-    .ghl-subaccounts-content         { max-height: 400px; overflow-y: auto; display: none; }
-    .ghl-subaccounts-content.visible  { display: block; }
-
-    .ghl-subaccounts-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 16px;
-    }
-
-    .ghl-subaccount {
-        padding: 12px;
-        border: 1px solid var(--ghl-border);
-        border-radius: 8px;
-        background: white;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .ghl-subaccount-info  { display: flex; align-items: center; }
-
-    .ghl-subaccount-icon {
-        width: 32px; height: 32px;
-        border-radius: 6px;
-        background: var(--ghl-light-gray);
-        display: flex; align-items: center; justify-content: center;
-        margin-right: 12px;
-    }
-
-    .ghl-subaccount-icon svg { width: 16px; height: 16px; color: var(--ghl-dark); }
-    .ghl-subaccount-name     { font-weight: 500; color: var(--ghl-dark); margin-bottom: 2px; }
-    .ghl-subaccount-status   { font-size: 12px; color: var(--ghl-gray); }
-    .ghl-subaccount-credits  { font-weight: 600; color: var(--ghl-dark); }
-
-    .ghl-rotate { transform: rotate(180deg); }
-
-    .ghl-types-section         { margin-top: 24px; display: none; }
-    .ghl-types-section.visible { display: block; }
-
-    .ghl-types-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 16px;
-    }
-
-    .ghl-type {
-        padding: 12px;
-        border: 1px solid var(--ghl-border);
-        border-radius: 8px;
-        background: white;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-    }
-
-    .ghl-type:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
-
-    .ghl-type-info { display: flex; align-items: center; }
-
-    .ghl-type-icon {
-        width: 32px; height: 32px;
-        border-radius: 6px;
-        background: var(--ghl-light-gray);
-        display: flex; align-items: center; justify-content: center;
-        margin-right: 12px;
-    }
-
-    .ghl-type-icon svg { width: 16px; height: 16px; color: var(--ghl-dark); }
-    .ghl-type-name     { font-weight: 500; color: var(--ghl-dark); margin-bottom: 2px; }
-    .ghl-type-status   { font-size: 12px; color: var(--ghl-gray); }
-    .ghl-type-credits  { font-weight: 600; color: var(--ghl-dark); }
-
-    .ghl-error-message {
-        display: none;
-        text-align: center;
-        padding: 16px;
-        color: #e53e3e;
-        font-weight: 500;
-        background: white;
-        border-radius: 8px;
-        margin-bottom: 16px;
-    }
-
-    .ghl-error-message.visible { display: block; }
-
-    .ghl-progress-section.visible { display: block; }
-
-    .ghl-metrics-credits, .ghl-metrics-amount         { display: none; }
-    .ghl-metrics-credits.active, .ghl-metrics-amount.active { display: block; }
-
-    .ghl-modal {
-        display: none;
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 1000;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .ghl-modal.visible { display: flex; }
-
-    .ghl-modal-content {
-        background: white;
-        border-radius: 12px;
-        max-width: 600px;
-        width: 90%;
-        max-height: 50vh;
-        overflow-y: auto;
-        padding: 20px;
-        box-shadow: var(--ghl-card-shadow);
-        position: relative;
-    }
-
-    .ghl-modal-close { position: absolute; top: 12px; right: 12px; cursor: pointer; font-size: 20px; color: var(--ghl-dark); }
-    .ghl-modal-title { font-size: 16px; font-weight: 600; color: var(--ghl-dark); margin-bottom: 12px; }
-
-    .ghl-transactions-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-
-    .ghl-transactions-table th,
-    .ghl-transactions-table td { padding: 10px; text-align: left; border-bottom: 1px solid var(--ghl-border); }
-
-    .ghl-transactions-table th { font-weight: 600; color: var(--ghl-dark); background: var(--ghl-light-gray); }
-    .ghl-transactions-table td { font-size: 14px; color: var(--ghl-dark); }
-
-    @media (max-width: 768px) {
-        .ghl-content  { grid-template-columns: 1fr; }
-        .ghl-tab      { padding: 8px 16px; font-size: 13px; }
-        .ghl-metric-value { font-size: 20px; }
+    @media(max-width:700px){
+        .usage-grid{grid-template-columns:1fr;}
+        .metrics-pane.active{grid-template-columns:1fr 1fr;}
+        .modal-kpis{grid-template-columns:1fr 1fr;}
+        .mo-grid{grid-template-columns:1fr;}
+        .mo-tiles{grid-template-columns:1fr;}
+        .sel-wrap{min-width:0;width:100%;}
+        .topbar{flex-direction:column;align-items:flex-start;}
     }
     </style>
 </head>
 <body>
-    <div class="ghl-dashboard">
-        <div class="ghl-header">
-            <div class="ghl-header-top">
-                <div class="ghl-title">Credits Dashboard</div>
-                <div class="ghl-logo">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
+<div class="wrap">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+        <div class="brand">
+            <div class="brand-icon">
+                <svg viewBox="0 0 36 36" fill="none"><path d="M18 6C11.373 6 6 11.373 6 18c0 2.215.605 4.29 1.658 6.071L6 30l6.144-1.614A11.93 11.93 0 0018 30c6.627 0 12-5.373 12-12S24.627 6 18 6zm-4 9h8m-8 4h5" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
             </div>
-            <select id="subaccountSelect" class="ghl-subaccount-select">
+            <div>
+                <div class="brand-name">Credits Dashboard</div>
+                <div class="brand-sub">WhatsApp &amp; Email Spend Tracker</div>
+            </div>
+        </div>
+        <div class="sel-wrap">
+            <select class="sub-sel" id="subSel">
                 <option value="">All Subaccounts</option>
-                <?php foreach ($processedData as $locationId => $data): ?>
-                    <option value="<?php echo $locationId; ?>"><?php echo htmlspecialchars($data['locationName']); ?></option>
+                <?php foreach ($processedData as $locId => $data): ?>
+                <option value="<?php echo htmlspecialchars($locId); ?>"><?php echo htmlspecialchars($data['locationName']); ?></option>
                 <?php endforeach; ?>
             </select>
-            <div id="errorMessage" class="ghl-error-message"></div>
+            <svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <div class="ghl-content">
-            <!-- WhatsApp Card -->
-            <div class="ghl-card whatsapp">
-                <div class="ghl-card-title">WhatsApp Usage</div>
-                <div class="ghl-progress-section whatsapp visible">
-                    <div class="ghl-progress-header">
-                        <div class="ghl-progress-title">Usage Progress</div>
-                        <div class="ghl-progress-percent whatsapp"><?php echo $initialData['whatsappPercent']; ?>% Used</div>
+    </div>
+
+    <!-- USAGE CARDS -->
+    <div class="usage-grid" id="usageGrid">
+        <?php
+        $cards = [
+            'wa' => [
+                'cls'   => 'wa',
+                'label' => 'WhatsApp',
+                'pct'   => $initialData['whatsappPercent'],
+                'credit'=> $initialData['whatsappCredit'],
+                'usedC' => $initialData['whatsappUsedCredit'],
+                'remC'  => $initialData['whatsappRemainingCredit'],
+                'total' => $initialData['whatsappAmount'],
+                'usedA' => $initialData['whatsappUsedAmount'],
+                'remA'  => $initialData['whatsappRemainingAmount'],
+                'rate'  => 'RM 0.50 / msg',
+                'icon'  => '<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6A8.38 8.38 0 0112 10h.5a8.48 8.48 0 018 8v.5z"/>',
+            ],
+            'em' => [
+                'cls'   => 'em',
+                'label' => 'Email',
+                'pct'   => $initialData['emailPercent'],
+                'credit'=> $initialData['emailCredit'],
+                'usedC' => $initialData['emailUsedCredit'],
+                'remC'  => $initialData['emailRemainingCredit'],
+                'total' => $initialData['emailAmount'],
+                'usedA' => $initialData['emailUsedAmount'],
+                'remA'  => $initialData['emailRemainingAmount'],
+                'rate'  => 'RM 0.005 / email',
+                'icon'  => '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+            ],
+        ];
+        foreach ($cards as $c):
+            $exc = $c['pct'] >= 100;
+            $midC = number_format(round($c['credit'] / 2));
+            $maxC = number_format($c['credit']);
+            $midA = 'RM ' . number_format($c['total'] / 2, 2);
+            $maxA = 'RM ' . number_format($c['total'], 2);
+        ?>
+        <div class="ucard <?php echo $c['cls']; ?>" id="ucard-<?php echo $c['cls']; ?>">
+            <div class="ucard-inner">
+                <div class="ucard-head">
+                    <div class="ucard-ico">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="var(--<?php echo $c['cls']; ?>)" stroke-width="2"><?php echo $c['icon']; ?></svg>
                     </div>
-                    <div class="ghl-progress-bar">
-                        <div class="ghl-progress-fill whatsapp" style="width: <?php echo $initialData['whatsappPercent']; ?>%;"></div>
+                    <div class="ucard-ttl"><?php echo $c['label']; ?></div>
+                    <div class="ucard-pct <?php echo $exc ? 'exceeded' : ''; ?>" id="pct-<?php echo $c['cls']; ?>"><?php echo $c['pct']; ?>% used</div>
+                </div>
+                <div class="prog-wrap">
+                    <div class="prog-labels-top">
+                        <span>Usage Progress</span>
+                        <span id="pctlbl-<?php echo $c['cls']; ?>"><?php echo $c['pct']; ?>%</span>
                     </div>
-                    <div class="ghl-progress-tooltip">Percentage of total credits used</div>
-                    <div class="ghl-progress-labels">
-                        <div>0</div>
-                        <div><?php echo number_format(round($initialData['whatsappMax'] / 2), 2); ?></div>
-                        <div><?php echo number_format($initialData['whatsappMax'], 2); ?></div>
+                    <div class="prog-track">
+                        <div class="prog-fill <?php echo $c['cls']; ?> <?php echo $exc ? 'exceeded' : ''; ?>" id="fill-<?php echo $c['cls']; ?>" style="width:<?php echo $c['pct']; ?>%"></div>
+                    </div>
+                    <div class="prog-midmarks">
+                        <span>0</span>
+                        <span id="mid-<?php echo $c['cls']; ?>"><?php echo $midC; ?></span>
+                        <span id="max-<?php echo $c['cls']; ?>"><?php echo $maxC; ?></span>
                     </div>
                 </div>
-                <div class="ghl-tabs">
-                    <div class="ghl-tab whatsapp active" data-tab="credits">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                        </svg>
-                        Credits
-                    </div>
-                    <div class="ghl-tab whatsapp" data-tab="amount">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        Amount (RM)
-                    </div>
+                <div class="utabs">
+                    <button class="utab active" data-tab="credits" data-card="<?php echo $c['cls']; ?>">Credits</button>
+                    <button class="utab" data-tab="amount" data-card="<?php echo $c['cls']; ?>">Amount (RM)</button>
                 </div>
-                <div class="ghl-metrics-credits active">
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Total Credits</div>
-                        <div id="whatsappCreditTotal" class="ghl-metric-value"><?php echo number_format($initialData['whatsappCredit'], 0); ?></div>
+                <!-- Credits pane -->
+                <div class="metrics-pane active" id="pane-<?php echo $c['cls']; ?>-credits">
+                    <div class="metric">
+                        <div class="metric-lbl">Total</div>
+                        <div class="metric-val" id="<?php echo $c['cls']; ?>-cTotal"><?php echo number_format($c['credit']); ?></div>
+                        <div class="metric-sub">allocated</div>
                     </div>
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Used Credits</div>
-                        <div id="whatsappCreditUsed" class="ghl-metric-value"><?php echo number_format($initialData['whatsappUsedCredit'], 0); ?></div>
+                    <div class="metric">
+                        <div class="metric-lbl">Used</div>
+                        <div class="metric-val" id="<?php echo $c['cls']; ?>-cUsed"><?php echo number_format($c['usedC']); ?></div>
+                        <div class="metric-sub">consumed</div>
                     </div>
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Remaining Credits</div>
-                        <div id="whatsappCreditRemaining" class="ghl-metric-value"><?php echo number_format($initialData['whatsappRemainingCredit'], 0); ?></div>
-                    </div>
-                </div>
-                <div class="ghl-metrics-amount">
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Total Amount (RM)</div>
-                        <div id="whatsappAmountTotal" class="ghl-metric-value"><?php echo number_format($initialData['whatsappAmount'], 2); ?></div>
-                    </div>
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Used Amount (RM)</div>
-                        <div id="whatsappAmountUsed" class="ghl-metric-value"><?php echo number_format($initialData['whatsappUsedAmount'], 2); ?></div>
-                    </div>
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Remaining Amount (RM)</div>
-                        <div id="whatsappAmountRemaining" class="ghl-metric-value"><?php echo number_format($initialData['whatsappRemainingAmount'], 2); ?></div>
-                    </div>
-                </div>
-            </div>
-            <!-- Email Card -->
-            <div class="ghl-card email">
-                <div class="ghl-card-title">Email Usage</div>
-                <div class="ghl-progress-section email visible">
-                    <div class="ghl-progress-header">
-                        <div class="ghl-progress-title">Usage Progress</div>
-                        <div class="ghl-progress-percent email"><?php echo $initialData['emailPercent']; ?>% Used</div>
-                    </div>
-                    <div class="ghl-progress-bar">
-                        <div class="ghl-progress-fill email" style="width: <?php echo $initialData['emailPercent']; ?>%;"></div>
-                    </div>
-                    <div class="ghl-progress-tooltip">Percentage of total credits used</div>
-                    <div class="ghl-progress-labels">
-                        <div>0</div>
-                        <div><?php echo number_format(round($initialData['emailMax'] / 2), 2); ?></div>
-                        <div><?php echo number_format($initialData['emailMax'], 2); ?></div>
-                    </div>
-                </div>
-                <div class="ghl-tabs">
-                    <div class="ghl-tab email active" data-tab="credits">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                        </svg>
-                        Credits
-                    </div>
-                    <div class="ghl-tab email" data-tab="amount">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        Amount (RM)
-                    </div>
-                </div>
-                <div class="ghl-metrics-credits active">
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Total Credits</div>
-                        <div id="emailCreditTotal" class="ghl-metric-value"><?php echo number_format($initialData['emailCredit'], 0); ?></div>
-                    </div>
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Used Credits</div>
-                        <div id="emailCreditUsed" class="ghl-metric-value"><?php echo number_format($initialData['emailUsedCredit'], 0); ?></div>
-                    </div>
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Remaining Credits</div>
-                        <div id="emailCreditRemaining" class="ghl-metric-value"><?php echo number_format($initialData['emailRemainingCredit'], 0); ?></div>
-                    </div>
-                </div>
-                <div class="ghl-metrics-amount">
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Total Amount (RM)</div>
-                        <div id="emailAmountTotal" class="ghl-metric-value"><?php echo number_format($initialData['emailAmount'], 2); ?></div>
-                    </div>
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Used Amount (RM)</div>
-                        <div id="emailAmountUsed" class="ghl-metric-value"><?php echo number_format($initialData['emailUsedAmount'], 2); ?></div>
-                    </div>
-                    <div class="ghl-metric">
-                        <div class="ghl-metric-label">Remaining Amount (RM)</div>
-                        <div id="emailAmountRemaining" class="ghl-metric-value"><?php echo number_format($initialData['emailRemainingAmount'], 2); ?></div>
-                    </div>
-                </div>
-            </div>
-            <!-- Types Section -->
-            <div id="typesSection" class="ghl-types-section" style="grid-column: span 2;">
-                <div class="ghl-card-title">Usage by Type</div>
-                <div id="typesGrid" class="ghl-types-grid"></div>
-            </div>
-            <!-- Subaccounts Section -->
-            <div id="subaccountsToggle" class="ghl-subaccounts-toggle" style="grid-column: span 2;">
-                <div class="ghl-card-title">Sub Accounts (<?php echo count($processedData); ?>)</div>
-                <svg id="toggleIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </div>
-            <div id="subaccountsContent" class="ghl-subaccounts-content" style="grid-column: span 2;">
-                <div class="ghl-subaccounts-grid">
-                    <?php
-                    $icons = [
-                        '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>',
-                        '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>',
-                        '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
-                    ];
-                    $iconIndex = 0;
-                    foreach ($processedData as $locationId => $data):
-                        $locationName        = htmlspecialchars($data['locationName']);
-                        $usedAmountRm        = $data['whatsappAmount'] + $data['emailAmount'];
-                        $usedAmountFormatted = number_format($usedAmountRm, 2);
-                        $status              = $usedAmountRm > 0 ? 'Active' : 'Inactive';
-                        $icon                = $icons[$iconIndex % count($icons)];
-                        $iconIndex++;
-                    ?>
-                    <div class="ghl-subaccount">
-                        <div class="ghl-subaccount-info">
-                            <div class="ghl-subaccount-icon"><?php echo $icon; ?></div>
-                            <div>
-                                <div class="ghl-subaccount-name"><?php echo $locationName; ?></div>
-                                <div class="ghl-subaccount-status"><?php echo $status; ?> &bull; <?php echo $usedAmountFormatted; ?> RM used</div>
-                            </div>
+                    <div class="metric <?php echo $c['remC'] < 0 ? 'exceeded-tile' : ''; ?>" id="tile-<?php echo $c['cls']; ?>-cRem">
+                        <div class="metric-lbl">Remaining</div>
+                        <div class="metric-val <?php echo $c['remC'] < 0 ? 'exceeded' : ''; ?>" id="<?php echo $c['cls']; ?>-cRem">
+                            <?php echo ($c['remC'] < 0 ? '−' : '') . number_format(abs($c['remC'])); ?>
                         </div>
-                        <div class="ghl-subaccount-credits"><?php echo $usedAmountFormatted; ?></div>
+                        <div class="metric-sub" id="sub-<?php echo $c['cls']; ?>-cRem"><?php echo $c['remC'] < 0 ? 'over limit' : 'credits left'; ?></div>
                     </div>
-                    <?php endforeach; ?>
                 </div>
+                <!-- Amount pane -->
+                <div class="metrics-pane" id="pane-<?php echo $c['cls']; ?>-amount">
+                    <div class="metric">
+                        <div class="metric-lbl">Total</div>
+                        <div class="metric-val" id="<?php echo $c['cls']; ?>-aTotal">RM <?php echo number_format($c['total'], 2); ?></div>
+                        <div class="metric-sub">budget</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-lbl">Used</div>
+                        <div class="metric-val" id="<?php echo $c['cls']; ?>-aUsed">RM <?php echo number_format($c['usedA'], 2); ?></div>
+                        <div class="metric-sub"><?php echo $c['rate']; ?></div>
+                    </div>
+                    <div class="metric <?php echo $c['remA'] < 0 ? 'exceeded-tile' : ''; ?>" id="tile-<?php echo $c['cls']; ?>-aRem">
+                        <div class="metric-lbl">Remaining</div>
+                        <div class="metric-val <?php echo $c['remA'] < 0 ? 'exceeded' : ''; ?>" id="<?php echo $c['cls']; ?>-aRem">
+                            <?php echo ($c['remA'] < 0 ? '−' : '') . 'RM ' . number_format(abs($c['remA']), 2); ?>
+                        </div>
+                        <div class="metric-sub" id="sub-<?php echo $c['cls']; ?>-aRem"><?php echo $c['remA'] < 0 ? 'over budget' : 'remaining'; ?></div>
+                    </div>
+                </div>
+                <!-- midmark data -->
+                <span class="midmark-data" style="display:none"
+                    data-card="<?php echo $c['cls']; ?>"
+                    data-mid-c="<?php echo $midC; ?>"
+                    data-max-c="<?php echo $maxC; ?>"
+                    data-mid-a="<?php echo $midA; ?>"
+                    data-max-a="<?php echo $maxA; ?>"></span>
             </div>
         </div>
-        <!-- Transactions Modal -->
-        <div id="transactionsModal" class="ghl-modal">
-            <div class="ghl-modal-content">
-                <span id="modalClose" class="ghl-modal-close">&times;</span>
-                <div id="modalTitle" class="ghl-modal-title"></div>
-                <table class="ghl-transactions-table">
+        <?php endforeach; ?>
+    </div>
+
+    <!-- ── ALL: Subaccounts table panel ── -->
+    <div class="panel open" id="subPanel">
+        <div class="panel-hdr" id="subToggle">
+            <div class="panel-hdr-l">
+                <span class="panel-ttl">Subaccounts</span>
+                <span class="chip"><?php echo count($processedData); ?> accounts</span>
+            </div>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="panel-body">
+            <div class="tbl-scroll">
+                <table>
                     <thead>
                         <tr>
-                            <th>Date &amp; Time</th>
-                            <th>Amount (RM)</th>
-                            <th>Type</th>
+                            <th>#</th>
+                            <th>Subaccount</th>
+                            <th class="r">WA Spent</th>
+                            <th>WA Usage</th>
+                            <th class="r">Email Spent</th>
+                            <th>Email Usage</th>
+                            <th>Status</th>
                         </tr>
                     </thead>
-                    <tbody id="transactionsTableBody"></tbody>
+                    <tbody>
+                        <?php foreach ($subRows as $i => $r):
+                            $active = ($r['waUsed'] + $r['emUsed']) > 0;
+                            $waExc  = $r['waPct'] >= 100;
+                            $emExc  = $r['emPct'] >= 100;
+                        ?>
+                        <tr style="cursor:default">
+                            <td style="color:var(--text3);font-size:13px"><?php echo $i + 1; ?></td>
+                            <td>
+                                <div class="td-name"><?php echo htmlspecialchars($r['name']); ?></div>
+                                <div class="td-id"><?php echo htmlspecialchars($r['id']); ?></div>
+                            </td>
+                            <td class="td-amt wa r">RM <?php echo number_format($r['waUsed'], 2); ?></td>
+                            <td>
+                                <div class="mini-bar-wrap">
+                                    <div class="mini-bar"><div class="mini-fill wa <?php echo $waExc ? 'exceeded' : ''; ?>" style="width:<?php echo $r['waPct']; ?>%"></div></div>
+                                    <span class="mini-pct <?php echo $waExc ? 'exceeded' : ''; ?>"><?php echo $r['waPct']; ?>%</span>
+                                </div>
+                            </td>
+                            <td class="td-amt em r">RM <?php echo number_format($r['emUsed'], 2); ?></td>
+                            <td>
+                                <div class="mini-bar-wrap">
+                                    <div class="mini-bar"><div class="mini-fill em <?php echo $emExc ? 'exceeded' : ''; ?>" style="width:<?php echo $r['emPct']; ?>%"></div></div>
+                                    <span class="mini-pct <?php echo $emExc ? 'exceeded' : ''; ?>"><?php echo $r['emPct']; ?>%</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="pill <?php echo $active ? 'pill-active' : 'pill-inactive'; ?>">
+                                    <span class="pdot <?php echo $active ? 'pdot-active' : 'pdot-inactive'; ?>"></span>
+                                    <?php echo $active ? 'Active' : 'Inactive'; ?>
+                                </span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const subaccountData = <?php echo $subaccountDataJson; ?>;
-            const typeIcons = {
-                whatsapp: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>',
-                email:    '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>'
-            };
+    <!-- ── INDIVIDUAL: Monthly transactions panel ── -->
+    <div class="panel open" id="monthPanel" style="display:none">
+        <div class="panel-hdr" id="monthToggle">
+            <div class="panel-hdr-l">
+                <span class="panel-ttl">Monthly Transactions</span>
+            </div>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="panel-body">
+            <div style="padding:20px 24px">
+                <div class="sel-wrap">
+                    <select class="sub-sel" id="monthPicker">
+                        <option value="">Select a month to view transactions…</option>
+                    </select>
+                    <svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                <div class="mo-tiles" id="moTiles" style="display:none;margin-top:16px;"></div>
+            </div>
+        </div>
+    </div>
 
-            function fmt2(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-            function fmt0(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+</div><!-- /wrap -->
 
-            function updateDashboard(selected) {
-                const data = subaccountData[selected];
-                document.getElementById('errorMessage').classList.toggle('visible', !data);
-                if (!data) {
-                    document.getElementById('errorMessage').textContent = 'No data available for the selected subaccount.';
-                    return;
-                }
+<!-- TRANSACTION MODAL (individual month category) -->
+<div id="txModal" class="modal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <div>
+                <div class="modal-cat" id="txModalCat"></div>
+                <div class="modal-ttl" id="txModalTtl"></div>
+                <div class="modal-meta" id="txModalMeta"></div>
+            </div>
+            <button class="modal-close" id="txModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-summary" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+                <div class="ms-tile" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;">
+                    <div class="ms-lbl" style="font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);margin-bottom:4px;">Total Spent</div>
+                    <div class="ms-val" id="txTotalAmt" style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--text);"></div>
+                </div>
+                <div class="ms-tile" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;">
+                    <div class="ms-lbl" style="font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);margin-bottom:4px;">Transactions</div>
+                    <div class="ms-val" id="txTotalCnt" style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--text);"></div>
+                </div>
+            </div>
+            <div class="tbl-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date &amp; Time</th>
+                            <th>Type</th>
+                            <th class="r">Amount (RM)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="txTbody"></tbody>
+                </table>
+            </div>
+            <p style="margin-top:14px;font-size:12px;color:var(--text3);text-align:center;display:none;"></p>
+        </div>
+    </div>
+</div>
 
-                const isAll = selected === '';
 
-                // Progress bars visibility
-                document.querySelector('.ghl-progress-section.whatsapp').classList.toggle('visible', data.whatsappMax > 0);
-                document.querySelector('.ghl-progress-section.email').classList.toggle('visible', data.emailMax > 0);
 
-                // Types section: show only when a specific subaccount is selected
-                document.getElementById('typesSection').classList.toggle('visible', !isAll);
+<script>
+const subaccountData = <?php echo $subaccountDataJson; ?>;
 
-                // Subaccounts list: show only on "All"
-                document.getElementById('subaccountsContent').classList.toggle('visible', isAll && document.getElementById('subaccountsContent').classList.contains('visible'));
-                document.getElementById('subaccountsToggle').style.display = isAll ? '' : 'none';
+// ── Midmarks init ──
+document.querySelectorAll('.midmark-data').forEach(el => {
+    const c = el.dataset.card;
+    document.getElementById('mid-' + c).textContent = el.dataset.midC;
+    document.getElementById('max-' + c).textContent = el.dataset.maxC;
+});
 
-                // Metrics
-                document.getElementById('whatsappCreditTotal').textContent     = fmt0(data.whatsappCredit);
-                document.getElementById('whatsappCreditUsed').textContent      = fmt0(data.whatsappUsedCredit);
-                document.getElementById('whatsappCreditRemaining').textContent = fmt0(data.whatsappRemainingCredit);
-                document.getElementById('whatsappAmountTotal').textContent     = fmt2(data.whatsappAmount);
-                document.getElementById('whatsappAmountUsed').textContent      = fmt2(data.whatsappUsedAmount);
-                document.getElementById('whatsappAmountRemaining').textContent = fmt2(data.whatsappRemainingAmount);
+// ── Tabs ──
+document.querySelectorAll('.utab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const card = btn.dataset.card;
+        const tab  = btn.dataset.tab;
+        document.querySelectorAll(`.utab[data-card="${card}"]`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll(`[id^="pane-${card}-"]`).forEach(p => p.classList.remove('active'));
+        document.getElementById(`pane-${card}-${tab}`).classList.add('active');
+        const el = document.querySelector(`.midmark-data[data-card="${card}"]`);
+        document.getElementById('mid-' + card).textContent = tab === 'credits' ? el.dataset.midC : el.dataset.midA;
+        document.getElementById('max-' + card).textContent = tab === 'credits' ? el.dataset.maxC : el.dataset.maxA;
+    });
+});
 
-                document.getElementById('emailCreditTotal').textContent        = fmt0(data.emailCredit);
-                document.getElementById('emailCreditUsed').textContent         = fmt0(data.emailUsedCredit);
-                document.getElementById('emailCreditRemaining').textContent    = fmt0(data.emailRemainingCredit);
-                document.getElementById('emailAmountTotal').textContent        = fmt2(data.emailAmount);
-                document.getElementById('emailAmountUsed').textContent         = fmt2(data.emailUsedAmount);
-                document.getElementById('emailAmountRemaining').textContent    = fmt2(data.emailRemainingAmount);
+// ── Panel toggles ──
+document.getElementById('subToggle').addEventListener('click', () => {
+    document.getElementById('subPanel').classList.toggle('open');
+});
+document.getElementById('monthToggle').addEventListener('click', () => {
+    document.getElementById('monthPanel').classList.toggle('open');
+});
 
-                // Progress bars
-                document.querySelector('.ghl-progress-fill.whatsapp').style.width = `${data.whatsappPercent}%`;
-                document.querySelector('.ghl-progress-fill.email').style.width    = `${data.emailPercent}%`;
-                document.querySelector('.ghl-progress-percent.whatsapp').textContent = `${data.whatsappPercent}% Used`;
-                document.querySelector('.ghl-progress-percent.email').textContent    = `${data.emailPercent}% Used`;
+// ── Formatters ──
+function fmt0(n) { return Math.abs(n).toLocaleString('en-US', {maximumFractionDigits:0}); }
+function fmt2(n) { return Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function signedC(n)  { return (n < 0 ? '−' : '') + fmt0(n); }
+function signedRM(n) { return (n < 0 ? '−' : '') + 'RM ' + fmt2(n); }
 
-                // Progress labels
-                const wLabels = document.querySelectorAll('.ghl-progress-section.whatsapp .ghl-progress-labels div');
-                wLabels[1].textContent = fmt2(Math.round(data.whatsappMax / 2));
-                wLabels[2].textContent = fmt2(data.whatsappMax);
+// ── Apply card metrics + progress ──
+function applyCard(cls, d) {
+    const isWa = cls === 'wa';
+    const pct  = isWa ? d.whatsappPercent          : d.emailPercent;
+    const remC = isWa ? d.whatsappRemainingCredit  : d.emailRemainingCredit;
+    const remA = isWa ? d.whatsappRemainingAmount  : d.emailRemainingAmount;
+    const exc  = pct >= 100;
+    const totC = isWa ? d.whatsappCredit           : d.emailCredit;
+    const usedC= isWa ? d.whatsappUsedCredit       : d.emailUsedCredit;
+    const totA = isWa ? d.whatsappAmount           : d.emailAmount;
+    const usedA= isWa ? d.whatsappUsedAmount       : d.emailUsedAmount;
 
-                const eLabels = document.querySelectorAll('.ghl-progress-section.email .ghl-progress-labels div');
-                eLabels[1].textContent = fmt2(Math.round(data.emailMax / 2));
-                eLabels[2].textContent = fmt2(data.emailMax);
+    const pctEl = document.getElementById('pct-' + cls);
+    pctEl.textContent = pct + '% used';
+    pctEl.classList.toggle('exceeded', exc);
+    document.getElementById('pctlbl-' + cls).textContent = pct + '%';
 
-                // Types grid
-                const typesGrid = document.getElementById('typesGrid');
-                typesGrid.innerHTML = '';
-                if (!isAll) {
-                    const iconArr = Object.values(typeIcons);
-                    let i = 0;
-                    for (const [type, typeData] of Object.entries(data.types || {})) {
-                        const icon = iconArr[i++ % iconArr.length];
-                        typesGrid.insertAdjacentHTML('beforeend', `
-                            <div class="ghl-type">
-                                <div class="ghl-type-info">
-                                    <div class="ghl-type-icon">${icon}</div>
-                                    <div>
-                                        <div class="ghl-type-name">${type}</div>
-                                        <div class="ghl-type-status">${typeData.count} transaction${typeData.count !== 1 ? 's' : ''}</div>
-                                    </div>
-                                </div>
-                                <div class="ghl-type-credits">${fmt2(typeData.totalAmount)}</div>
-                            </div>
-                        `);
-                    }
-                }
-            }
+    const fill = document.getElementById('fill-' + cls);
+    fill.style.width = pct + '%';
+    fill.classList.toggle('exceeded', exc);
 
-            // Tab switching
-            document.querySelectorAll('.ghl-tab').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    const card    = tab.closest('.ghl-card');
-                    const tabType = tab.dataset.tab;
-                    card.querySelectorAll('.ghl-tab').forEach(t => t.classList.remove('active'));
-                    card.querySelectorAll('.ghl-metrics-credits, .ghl-metrics-amount').forEach(m => m.classList.remove('active'));
-                    tab.classList.add('active');
-                    card.querySelector(`.ghl-metrics-${tabType}`).classList.add('active');
-                });
+    const el   = document.querySelector(`.midmark-data[data-card="${cls}"]`);
+    const midC = fmt0(totC / 2), maxC = fmt0(totC);
+    const midA = 'RM ' + fmt2(totA / 2), maxA = 'RM ' + fmt2(totA);
+    el.dataset.midC = midC; el.dataset.maxC = maxC;
+    el.dataset.midA = midA; el.dataset.maxA = maxA;
+    const activeTab = document.querySelector(`.utab.active[data-card="${cls}"]`)?.dataset.tab || 'credits';
+    document.getElementById('mid-' + cls).textContent = activeTab === 'credits' ? midC : midA;
+    document.getElementById('max-' + cls).textContent = activeTab === 'credits' ? maxC : maxA;
+
+    document.getElementById(cls + '-cTotal').textContent = fmt0(totC);
+    document.getElementById(cls + '-cUsed').textContent  = fmt0(usedC);
+    document.getElementById(cls + '-cRem').textContent   = signedC(remC);
+    document.getElementById(cls + '-cRem').className     = 'metric-val' + (remC < 0 ? ' exceeded' : '');
+    document.getElementById('tile-' + cls + '-cRem').className = 'metric' + (remC < 0 ? ' exceeded-tile' : '');
+    document.getElementById('sub-' + cls + '-cRem').textContent = remC < 0 ? 'over limit' : 'credits left';
+
+    document.getElementById(cls + '-aTotal').textContent = 'RM ' + fmt2(totA);
+    document.getElementById(cls + '-aUsed').textContent  = 'RM ' + fmt2(usedA);
+    document.getElementById(cls + '-aRem').textContent   = signedRM(remA);
+    document.getElementById(cls + '-aRem').className     = 'metric-val' + (remA < 0 ? ' exceeded' : '');
+    document.getElementById('tile-' + cls + '-aRem').className = 'metric' + (remA < 0 ? ' exceeded-tile' : '');
+    document.getElementById('sub-' + cls + '-aRem').textContent = remA < 0 ? 'over budget' : 'remaining';
+}
+
+// ── Build month picker for a given locationId ──
+let currentLocId = '';
+
+function buildMonthPicker(locId) {
+    const d      = subaccountData[locId];
+    const picker = document.getElementById('monthPicker');
+    picker.innerHTML = '<option value="">Select a month to view transactions…</option>';
+    const mData  = d.monthlyData || {};
+    Object.keys(mData).sort().reverse().forEach(mk => {
+        const mName = new Date(mk + '-02').toLocaleString('en-US', {month:'long', year:'numeric'});
+        const opt   = document.createElement('option');
+        opt.value   = mk;
+        opt.textContent = mName;
+        picker.appendChild(opt);
+    });
+    // reset tiles
+    const tiles = document.getElementById('moTiles');
+    tiles.innerHTML = '';
+    tiles.style.display = 'none';
+}
+
+// ── Month picker → category tiles ──
+document.getElementById('monthPicker').addEventListener('change', function () {
+    const mk    = this.value;
+    const tiles = document.getElementById('moTiles');
+    tiles.innerHTML = '';
+    if (!mk) { tiles.style.display = 'none'; return; }
+
+    const d     = subaccountData[currentLocId];
+    const types = ((d.monthlyData || {})[mk] || {}).types || {};
+    const mName = new Date(mk + '-02').toLocaleString('en-US', {month:'long', year:'numeric'});
+
+    let html = '';
+    [['whatsapp','wa','WhatsApp'], ['email','em','Email']].forEach(([key, cls, label]) => {
+        const t = types[key];
+        if (!t) return;
+        html += `
+        <div class="mo-tile" onclick="openTxModal('${mk}','${key}','${mName}')">
+            <div>
+                <div class="mo-tile-cat ${cls}"><span class="dot ${cls}"></span>${label}</div>
+                <div class="mo-tile-amt">RM ${fmt2(t.totalAmount)}</div>
+                <div class="mo-tile-cnt">${t.count} transaction${t.count !== 1 ? 's' : ''}</div>
+            </div>
+            <div class="mo-tile-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+        </div>`;
+    });
+
+    if (!html) html = '<p style="grid-column:1/-1;text-align:center;padding:20px 0;color:var(--text3);font-size:14px;">No transactions for this month.</p>';
+    tiles.innerHTML = html;
+    tiles.style.display = 'grid';
+});
+
+// ── Subaccount selector: toggle All ↔ Individual mode ──
+document.getElementById('subSel').addEventListener('change', function () {
+    const key  = this.value;
+    const d    = subaccountData[key];
+    if (!d) return;
+
+    applyCard('wa', d);
+    applyCard('em', d);
+
+    const isAll = key === '';
+    document.getElementById('subPanel').style.display   = isAll ? '' : 'none';
+    document.getElementById('monthPanel').style.display = isAll ? 'none' : '';
+
+    if (!isAll) {
+        currentLocId = key;
+        buildMonthPicker(key);
+        document.getElementById('monthPanel').classList.add('open');
+    }
+});
+
+// ── Transaction modal ──
+function openTxModal(mk, cat, mName) {
+    const d     = subaccountData[currentLocId];
+    const types = ((d.monthlyData || {})[mk] || {}).types || {};
+    const t     = types[cat];
+    if (!t) return;
+
+    const cls = cat === 'whatsapp' ? 'wa' : 'em';
+    const lbl = cat === 'whatsapp' ? 'WhatsApp' : 'Email';
+
+    document.getElementById('txModalCat').className   = 'modal-cat ' + cls;
+    document.getElementById('txModalCat').innerHTML   = `<span class="dot ${cls}"></span>${lbl}`;
+    document.getElementById('txModalTtl').textContent = mName;
+    document.getElementById('txModalMeta').textContent = t.count + ' transaction' + (t.count !== 1 ? 's' : '');
+    document.getElementById('txTotalAmt').textContent  = 'RM ' + fmt2(t.totalAmount);
+    document.getElementById('txTotalCnt').textContent  = t.count.toLocaleString();
+
+    // Show transactions
+    const tbody = document.getElementById('txTbody');
+    if (t.transactions && t.transactions.length) {
+        tbody.innerHTML = [...t.transactions].sort((a, b) => b.amount - a.amount).map(tx => {
+            const clean = tx.date.replace(/(st|nd|rd|th)/i, '').replace(/,/g, '');
+            const ts    = new Date(clean);
+            const fd    = isNaN(ts) ? tx.date : ts.toLocaleString('en-US', {
+                month:'short', day:'2-digit', year:'numeric',
+                hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true
             });
+            return `<tr>
+                <td class="td-date">${fd}</td>
+                <td class="td-type">${tx.originalType || lbl}</td>
+                <td class="td-amt ${cls} r">RM ${tx.amount.toFixed(3)}</td>
+            </tr>`;
+        }).join('');
+    } else {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text3);font-size:13px;">No transactions found.</td></tr>`;
+    }
 
-            // Subaccount select
-            document.getElementById('subaccountSelect').addEventListener('change', function() {
-                updateDashboard(this.value);
-            });
+    document.getElementById('txModal').classList.add('on');
+    document.body.style.overflow = 'hidden';
+}
 
-            // Subaccounts toggle
-            document.getElementById('subaccountsToggle').addEventListener('click', () => {
-                document.getElementById('subaccountsContent').classList.toggle('visible');
-                document.getElementById('toggleIcon').classList.toggle('ghl-rotate');
-            });
-
-            // Modal close
-            document.getElementById('modalClose').addEventListener('click', () => {
-                document.getElementById('transactionsModal').classList.remove('visible');
-            });
-            document.getElementById('transactionsModal').addEventListener('click', e => {
-                if (e.target === document.getElementById('transactionsModal')) {
-                    document.getElementById('transactionsModal').classList.remove('visible');
-                }
-            });
-        });
-    </script>
+function closeTxModal() {
+    document.getElementById('txModal').classList.remove('on');
+    document.body.style.overflow = '';
+}
+document.getElementById('txModalClose').addEventListener('click', closeTxModal);
+document.getElementById('txModal').addEventListener('click', e => { if (e.target === document.getElementById('txModal')) closeTxModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTxModal(); });
+</script>
 </body>
 </html>
