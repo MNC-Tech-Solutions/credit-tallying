@@ -403,6 +403,19 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     ::-webkit-scrollbar-track{background:transparent;}
     ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:999px;}
 
+    /* ── DATE RANGE PICKER ── */
+    .range-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .range-field{display:flex;flex-direction:column;gap:6px;}
+    .range-lbl{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);}
+    .range-input{width:100%;padding:11px 14px;font-size:14px;font-family:'DM Sans',sans-serif;font-weight:500;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);outline:none;transition:.2s;box-shadow:var(--shadow-sm);cursor:pointer;}
+    .range-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+    .range-actions{display:flex;gap:8px;margin-top:10px;}
+    .range-btn{padding:10px 20px;font-size:14px;font-family:'DM Sans',sans-serif;font-weight:600;color:#fff;background:var(--accent);border:none;border-radius:var(--r-sm);cursor:pointer;transition:opacity .15s;}
+    .range-btn:hover{opacity:.88;}
+    .range-btn.clear{background:var(--surface);color:var(--text2);border:1px solid var(--border);}
+    .range-hint{font-size:12px;color:var(--text3);margin-top:8px;min-height:18px;}
+    @media(max-width:520px){.range-wrap{grid-template-columns:1fr;}}
+
     /* ── MONTHLY TILES (individual mode) ── */
     .mo-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     .mo-tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:18px 20px;cursor:pointer;transition:background .15s,box-shadow .15s,transform .15s;display:flex;justify-content:space-between;align-items:center;gap:12px;}
@@ -421,7 +434,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     /* modal cat label */
     .modal-cat{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
     .modal-cat.wa{color:var(--wa);}
-    .modal-cat.em{color:var(--em);}
+    .modal-cat.em{color:var(--em);} 
 
     @media(max-width:700px){
         .usage-grid{grid-template-columns:1fr;}
@@ -649,12 +662,21 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
         </div>
         <div class="panel-body">
             <div style="padding:20px 24px">
-                <div class="sel-wrap">
-                    <select class="sub-sel" id="monthPicker">
-                        <option value="">Select a month to view transactions…</option>
-                    </select>
-                    <svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                <div class="range-wrap">
+                    <div class="range-field">
+                        <label class="range-lbl" for="dateFrom">From</label>
+                        <input class="range-input" type="date" id="dateFrom">
+                    </div>
+                    <div class="range-field">
+                        <label class="range-lbl" for="dateTo">To</label>
+                        <input class="range-input" type="date" id="dateTo">
+                    </div>
                 </div>
+                <div class="range-actions">
+                    <button class="range-btn" id="applyRange">Apply Range</button>
+                    <button class="range-btn clear" id="clearRange">Clear</button>
+                </div>
+                <div class="range-hint" id="rangeHint"></div>
                 <div class="mo-tiles" id="moTiles" style="display:none;margin-top:16px;"></div>
             </div>
         </div>
@@ -741,6 +763,7 @@ function fmt0(n) { return Math.abs(n).toLocaleString('en-US', {maximumFractionDi
 function fmt2(n) { return Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 function signedC(n)  { return (n < 0 ? '−' : '') + fmt0(n); }
 function signedRM(n) { return (n < 0 ? '−' : '') + 'RM ' + fmt2(n); }
+function formatDate(d) { return d.toLocaleDateString('en-MY', {day:'numeric', month:'short', year:'numeric'}); }
 
 // ── Apply card metrics + progress ──
 function applyCard(cls, d) {
@@ -787,48 +810,89 @@ function applyCard(cls, d) {
     document.getElementById('sub-' + cls + '-aRem').textContent = remA < 0 ? 'over budget' : 'remaining';
 }
 
-// ── Build month picker for a given locationId ──
+// ── Date range state ──
 let currentLocId = '';
 
-function buildMonthPicker(locId) {
-    const d      = subaccountData[locId];
-    const picker = document.getElementById('monthPicker');
-    picker.innerHTML = '<option value="">Select a month to view transactions…</option>';
-    const mData  = d.monthlyData || {};
-    Object.keys(mData).sort().reverse().forEach(mk => {
-        const mName = new Date(mk + '-02').toLocaleString('en-US', {month:'long', year:'numeric'});
-        const opt   = document.createElement('option');
-        opt.value   = mk;
-        opt.textContent = mName;
-        picker.appendChild(opt);
-    });
-    // reset tiles
+function setDateBounds(locId) {
+    const mData = (subaccountData[locId] || {}).monthlyData || {};
+    const months = Object.keys(mData).sort();
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo   = document.getElementById('dateTo');
+    if (!months.length) return;
+    dateFrom.min = months[0] + '-01';
+    dateTo.min   = months[0] + '-01';
+    const last = new Date(months[months.length - 1] + '-01');
+    last.setMonth(last.getMonth() + 1);
+    last.setDate(0);
+    const pad = n => String(n).padStart(2,'0');
+    const maxDate = last.getFullYear() + '-' + pad(last.getMonth()+1) + '-' + pad(last.getDate());
+    dateFrom.max = maxDate;
+    dateTo.max   = maxDate;
+}
+
+function resetDateRange() {
+    document.getElementById('dateFrom').value  = '';
+    document.getElementById('dateTo').value    = '';
+    document.getElementById('rangeHint').textContent = '';
     const tiles = document.getElementById('moTiles');
     tiles.innerHTML = '';
     tiles.style.display = 'none';
+    window._currentAggregated = null;
 }
 
-// ── Month picker → category tiles ──
-document.getElementById('monthPicker').addEventListener('change', function () {
-    const mk    = this.value;
-    const tiles = document.getElementById('moTiles');
-    tiles.innerHTML = '';
-    if (!mk) { tiles.style.display = 'none'; return; }
+function filterAndRender() {
+    const fromVal = document.getElementById('dateFrom').value;
+    const toVal   = document.getElementById('dateTo').value;
+    const hint    = document.getElementById('rangeHint');
+    const tiles   = document.getElementById('moTiles');
 
-    const d     = subaccountData[currentLocId];
-    const types = ((d.monthlyData || {})[mk] || {}).types || {};
-    const mName = new Date(mk + '-02').toLocaleString('en-US', {month:'long', year:'numeric'});
+    const from = fromVal ? new Date(fromVal) : null;
+    const to   = toVal   ? new Date(toVal)   : null;
+
+    if (from && to && from > to) {
+        hint.textContent = '⚠ "From" date must be before "To" date.';
+        tiles.style.display = 'none';
+        return;
+    }
+
+    const mData = (subaccountData[currentLocId] || {}).monthlyData || {};
+    const aggregated = {};
+
+    Object.entries(mData).forEach(([mKey, mData]) => {
+        const types = mData.types || {};
+        Object.entries(types).forEach(([cat, catData]) => {
+            (catData.transactions || []).forEach(tx => {
+                const clean = tx.date.replace(/(st|nd|rd|th)/i,'').replace(/,/g,'');
+                const ts    = new Date(clean);
+                if (isNaN(ts)) return;
+                if (from) { const d = new Date(ts); d.setHours(0,0,0,0); if (d < from) return; }
+                if (to)   { const d = new Date(ts); d.setHours(0,0,0,0); if (d > to)   return; }
+                if (!aggregated[cat]) aggregated[cat] = {totalAmount:0, count:0, transactions:[]};
+                aggregated[cat].totalAmount += tx.amount;
+                aggregated[cat].count++;
+                aggregated[cat].transactions.push(tx);
+            });
+        });
+    });
+
+    let label = '';
+    if (from && to)   label = formatDate(from) + ' – ' + formatDate(to);
+    else if (from)    label = 'From ' + formatDate(from);
+    else if (to)      label = 'Up to ' + formatDate(to);
+    else              label = 'All available transactions';
+
+    hint.textContent = label;
 
     let html = '';
-    [['whatsapp','wa','WhatsApp'], ['email','em','Email']].forEach(([key, cls, label]) => {
-        const t = types[key];
-        if (!t) return;
+    [['whatsapp','wa','WhatsApp'], ['email','em','Email']].forEach(([key, cls, lbl]) => {
+        const d = aggregated[key];
+        if (!d || d.count === 0) return;
         html += `
-        <div class="mo-tile" onclick="openTxModal('${mk}','${key}','${mName}')">
+        <div class="mo-tile" onclick="openTxModal('${key}','${label}')">
             <div>
-                <div class="mo-tile-cat ${cls}"><span class="dot ${cls}"></span>${label}</div>
-                <div class="mo-tile-amt">RM ${fmt2(t.totalAmount)}</div>
-                <div class="mo-tile-cnt">${t.count} transaction${t.count !== 1 ? 's' : ''}</div>
+                <div class="mo-tile-cat ${cls}"><span class="dot ${cls}"></span>${lbl}</div>
+                <div class="mo-tile-amt">RM ${fmt2(d.totalAmount)}</div>
+                <div class="mo-tile-cnt">${d.count} transaction${d.count !== 1 ? 's' : ''}</div>
             </div>
             <div class="mo-tile-arrow">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
@@ -836,15 +900,22 @@ document.getElementById('monthPicker').addEventListener('change', function () {
         </div>`;
     });
 
-    if (!html) html = '<p style="grid-column:1/-1;text-align:center;padding:20px 0;color:var(--text3);font-size:14px;">No transactions for this month.</p>';
+    if (!html) html = '<p style="grid-column:1/-1;text-align:center;padding:20px 0;color:var(--text3);font-size:14px;">No transactions found in this date range.</p>';
     tiles.innerHTML = html;
     tiles.style.display = 'grid';
+    window._currentAggregated = aggregated;
+}
+
+document.getElementById('applyRange').addEventListener('click', filterAndRender);
+document.getElementById('clearRange').addEventListener('click', resetDateRange);
+['dateFrom','dateTo'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') filterAndRender(); });
 });
 
-// ── Subaccount selector: toggle All ↔ Individual mode ──
+// ── Subaccount selector ──
 document.getElementById('subSel').addEventListener('change', function () {
-    const key  = this.value;
-    const d    = subaccountData[key];
+    const key = this.value;
+    const d   = subaccountData[key];
     if (!d) return;
 
     applyCard('wa', d);
@@ -856,16 +927,16 @@ document.getElementById('subSel').addEventListener('change', function () {
 
     if (!isAll) {
         currentLocId = key;
-        buildMonthPicker(key);
+        resetDateRange();
+        setDateBounds(key);
         document.getElementById('monthPanel').classList.add('open');
     }
 });
 
 // ── Transaction modal ──
-function openTxModal(mk, cat, mName) {
-    const d     = subaccountData[currentLocId];
-    const types = ((d.monthlyData || {})[mk] || {}).types || {};
-    const t     = types[cat];
+function openTxModal(cat, rangeLabel) {
+    const agg = window._currentAggregated || {};
+    const t   = agg[cat];
     if (!t) return;
 
     const cls = cat === 'whatsapp' ? 'wa' : 'em';
@@ -873,16 +944,19 @@ function openTxModal(mk, cat, mName) {
 
     document.getElementById('txModalCat').className   = 'modal-cat ' + cls;
     document.getElementById('txModalCat').innerHTML   = `<span class="dot ${cls}"></span>${lbl}`;
-    document.getElementById('txModalTtl').textContent = mName;
+    document.getElementById('txModalTtl').textContent = rangeLabel;
     document.getElementById('txModalMeta').textContent = t.count + ' transaction' + (t.count !== 1 ? 's' : '');
     document.getElementById('txTotalAmt').textContent  = 'RM ' + fmt2(t.totalAmount);
     document.getElementById('txTotalCnt').textContent  = t.count.toLocaleString();
 
-    // Show transactions
     const tbody = document.getElementById('txTbody');
     if (t.transactions && t.transactions.length) {
-        tbody.innerHTML = [...t.transactions].sort((a, b) => b.amount - a.amount).map(tx => {
-            const clean = tx.date.replace(/(st|nd|rd|th)/i, '').replace(/,/g, '');
+        tbody.innerHTML = [...t.transactions].sort((a, b) => {
+            const pa = new Date(a.date.replace(/(st|nd|rd|th)/i,'').replace(/,/g,''));
+            const pb = new Date(b.date.replace(/(st|nd|rd|th)/i,'').replace(/,/g,''));
+            return pb - pa;
+        }).map(tx => {
+            const clean = tx.date.replace(/(st|nd|rd|th)/i,'').replace(/,/g,'');
             const ts    = new Date(clean);
             const fd    = isNaN(ts) ? tx.date : ts.toLocaleString('en-US', {
                 month:'short', day:'2-digit', year:'numeric',
