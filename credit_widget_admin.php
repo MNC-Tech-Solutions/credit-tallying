@@ -3,6 +3,7 @@
  * GHL Credits Dashboard – Admin / All Subaccounts
  * Design: DM Sans + DM Serif Display, warm neutral palette.
  * Fix: remaining shows negative (red) when exceeded.
+ * currently using in sj360
  */
 ini_set('memory_limit', '512M');
 
@@ -21,12 +22,13 @@ function getCreditLimits($filePath) {
     $header = fgetcsv($file);
     if (!$header) { fclose($file); return $limits; }
 
-    $idxId = $idxWa = $idxEm = false;
+    $idxId = $idxWa = $idxEm = $idxCall = false;
     foreach ($header as $i => $col) {
         $col = strtolower(trim($col));
         if ($col === 'locationid' || $col === 'location id') $idxId = $i;
         if ($col === 'totalamount' || $col === 'whatsappcredits') $idxWa = $i;
         if ($col === 'emailcredits') $idxEm = $i;
+        if ($col === 'callcredits') $idxCall = $i;
     }
     if ($idxId === false) { fclose($file); return $limits; }
 
@@ -34,8 +36,9 @@ function getCreditLimits($filePath) {
         if (empty($row[$idxId])) continue;
         $locId = trim($row[$idxId]);
         $limits[$locId] = [
-            'whatsappCredit' => $idxWa !== false ? floatval($row[$idxWa] ?? 0) : 0,
-            'emailCredit'    => $idxEm !== false ? floatval($row[$idxEm] ?? 0) : 0,
+            'whatsappCredit' => $idxWa   !== false ? floatval($row[$idxWa]   ?? 0) : 0,
+            'emailCredit'    => $idxEm   !== false ? floatval($row[$idxEm]   ?? 0) : 0,
+            'callCredit'     => $idxCall !== false ? floatval($row[$idxCall] ?? 0) : 0,
         ];
     }
     fclose($file);
@@ -74,6 +77,8 @@ function processCsvFiles($csvFiles) {
                 $cat = 'whatsapp'; $cost = 0.50;
             } elseif (stripos($type, 'Emails') !== false || stripos($desc, 'emails') !== false) {
                 $cat = 'email'; $cost = 0.005;
+            } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
+                $cat = 'call'; $cost = floatval($row[$idxAmt]);
             } else {
                 continue;
             }
@@ -83,18 +88,21 @@ function processCsvFiles($csvFiles) {
             if (!isset($results[$locId])) {
                 $results[$locId] = [
                     'locationName'   => $locName,
-                    'emailAmount'    => 0, 'whatsappAmount' => 0,
-                    'emailCount'     => 0, 'whatsappCount'  => 0,
+                    'emailAmount'    => 0, 'whatsappAmount' => 0, 'callAmount'    => 0,
+                    'emailCount'     => 0, 'whatsappCount'  => 0, 'callCount'     => 0,
                     'monthlyData'    => [],
                 ];
             }
 
             if ($cat === 'email') {
-                $results[$locId]['emailAmount']   += $cost;
+                $results[$locId]['emailAmount']    += $cost;
                 $results[$locId]['emailCount']++;
-            } else {
+            } elseif ($cat === 'whatsapp') {
                 $results[$locId]['whatsappAmount'] += $cost;
                 $results[$locId]['whatsappCount']++;
+            } else {
+                $results[$locId]['callAmount']     += $cost;
+                $results[$locId]['callCount']++;
             }
 
             // Monthly aggregation — includes full transaction list for modal detail view
@@ -140,55 +148,68 @@ if (empty($processedData)) displayError("No valid data found. Please check the c
 // ─── Build Subaccount Data ────────────────────────────────────────────────────
 
 // Helper: build one subaccount record (allows negative remaining)
-function buildRecord($waCredit, $emCredit, $waUsedRm, $emUsedRm) {
-    $waMaxRm = $waCredit / 2;
-    $emMaxRm = $emCredit * 0.005;
-    $waUsedC = $waUsedRm / 0.50;
-    $emUsedC = $emUsedRm / 0.005;
+function buildRecord($waCredit, $emCredit, $callCredit, $waUsedRm, $emUsedRm, $callUsedRm) {
+    $waMaxRm   = $waCredit / 2;
+    $emMaxRm   = $emCredit * 0.005;
+    $callMaxRm = $callCredit * 0.054;
+    $waUsedC   = $waUsedRm   / 0.50;
+    $emUsedC   = $emUsedRm   / 0.005;
+    $callUsedC = $callUsedRm / 0.054;
     return [
         'whatsappCredit'          => $waCredit,
         'emailCredit'             => $emCredit,
+        'callCredit'              => $callCredit,
         'whatsappUsedCredit'      => $waUsedC,
         'emailUsedCredit'         => $emUsedC,
-        'whatsappRemainingCredit' => $waCredit - $waUsedC,   // may be negative
-        'emailRemainingCredit'    => $emCredit - $emUsedC,
+        'callUsedCredit'          => $callUsedC,
+        'whatsappRemainingCredit' => $waCredit   - $waUsedC,
+        'emailRemainingCredit'    => $emCredit   - $emUsedC,
+        'callRemainingCredit'     => $callCredit - $callUsedC,
         'whatsappAmount'          => $waMaxRm,
         'emailAmount'             => $emMaxRm,
+        'callAmount'              => $callMaxRm,
         'whatsappUsedAmount'      => $waUsedRm,
         'emailUsedAmount'         => $emUsedRm,
-        'whatsappRemainingAmount' => $waMaxRm - $waUsedRm,   // may be negative
-        'emailRemainingAmount'    => $emMaxRm - $emUsedRm,
-        'whatsappPercent'         => $waMaxRm > 0 ? min(100, round($waUsedRm / $waMaxRm * 100)) : 0,
-        'emailPercent'            => $emMaxRm > 0 ? min(100, round($emUsedRm / $emMaxRm * 100)) : 0,
+        'callUsedAmount'          => $callUsedRm,
+        'whatsappRemainingAmount' => $waMaxRm   - $waUsedRm,
+        'emailRemainingAmount'    => $emMaxRm   - $emUsedRm,
+        'callRemainingAmount'     => $callMaxRm - $callUsedRm,
+        'whatsappPercent'         => $waMaxRm   > 0 ? min(100, round($waUsedRm   / $waMaxRm   * 100)) : 0,
+        'emailPercent'            => $emMaxRm   > 0 ? min(100, round($emUsedRm   / $emMaxRm   * 100)) : 0,
+        'callPercent'             => $callMaxRm > 0 ? min(100, round($callUsedRm / $callMaxRm * 100)) : 0,
     ];
 }
 
 $subaccountData = [];
 
 // All-Subaccounts aggregate
-$totWaCredit = $totEmCredit = $totWaUsed = $totEmUsed = 0;
+$totWaCredit = $totEmCredit = $totCallCredit = $totWaUsed = $totEmUsed = $totCallUsed = 0;
 foreach ($processedData as $locId => $data) {
-    $totWaCredit += $creditLimits[$locId]['whatsappCredit'] ?? 0;
-    $totEmCredit += $creditLimits[$locId]['emailCredit']    ?? 0;
-    $totWaUsed   += $data['whatsappAmount'];
-    $totEmUsed   += $data['emailAmount'];
+    $totWaCredit   += $creditLimits[$locId]['whatsappCredit'] ?? 0;
+    $totEmCredit   += $creditLimits[$locId]['emailCredit']    ?? 0;
+    $totCallCredit += $creditLimits[$locId]['callCredit']     ?? 0;
+    $totWaUsed     += $data['whatsappAmount'];
+    $totEmUsed     += $data['emailAmount'];
+    $totCallUsed   += $data['callAmount'];
 }
-$subaccountData[''] = array_merge(buildRecord($totWaCredit, $totEmCredit, $totWaUsed, $totEmUsed), [
+$subaccountData[''] = array_merge(buildRecord($totWaCredit, $totEmCredit, $totCallCredit, $totWaUsed, $totEmUsed, $totCallUsed), [
     'name'        => 'All Subaccounts',
     'monthlyData' => [],
 ]);
 
 // Individual subaccounts
 foreach ($processedData as $locId => $data) {
-    $waC = $creditLimits[$locId]['whatsappCredit'] ?? 0;
-    $emC = $creditLimits[$locId]['emailCredit']    ?? 0;
+    $waC   = $creditLimits[$locId]['whatsappCredit'] ?? 0;
+    $emC   = $creditLimits[$locId]['emailCredit']    ?? 0;
+    $callC = $creditLimits[$locId]['callCredit']     ?? 0;
     $subaccountData[$locId] = array_merge(
-        buildRecord($waC, $emC, $data['whatsappAmount'], $data['emailAmount']),
+        buildRecord($waC, $emC, $callC, $data['whatsappAmount'], $data['emailAmount'], $data['callAmount']),
         [
             'name'        => $data['locationName'],
             'monthlyData' => $data['monthlyData'],
             'waCount'     => $data['whatsappCount'],
             'emCount'     => $data['emailCount'],
+            'callCount'   => $data['callCount'],
         ]
     );
 }
@@ -205,15 +226,19 @@ foreach ($processedData as $locId => $data) {
         'name'      => $data['locationName'],
         'waUsed'    => $data['whatsappAmount'],
         'emUsed'    => $data['emailAmount'],
+        'callUsed'  => $data['callAmount'],
         'waCount'   => $data['whatsappCount'],
         'emCount'   => $data['emailCount'],
+        'callCount' => $data['callCount'],
         'waPct'     => $d['whatsappPercent'],
         'emPct'     => $d['emailPercent'],
+        'callPct'   => $d['callPercent'],
         'waRem'     => $d['whatsappRemainingCredit'],
         'emRem'     => $d['emailRemainingCredit'],
+        'callRem'   => $d['callRemainingCredit'],
     ];
 }
-usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + $a['emUsed']));
+usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=> ($a['waUsed'] + $a['emUsed'] + $a['callUsed']));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -236,6 +261,9 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
         --em:          #1e6fa8;
         --em-light:    #3b82f6;
         --em-soft:     rgba(30,111,168,0.09);
+        --call:        #d97706;
+        --call-light:  #f59e0b;
+        --call-soft:   rgba(217,119,6,0.09);
         --accent:      #7c3aed;
         --accent-soft: rgba(124,58,237,0.08);
         --danger:      #dc2626;
@@ -257,7 +285,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
         background:radial-gradient(ellipse 70% 50% at 10% 0%,rgba(37,211,102,0.04) 0%,transparent 60%),
                    radial-gradient(ellipse 50% 40% at 90% 100%,rgba(30,111,168,0.03) 0%,transparent 60%);}
-    .wrap{max-width:1100px;margin:0 auto;padding:0 28px;position:relative;z-index:1;}
+    .wrap{max-width:1250px;margin:0 auto;padding:0 28px;position:relative;z-index:1;}
 
     /* ── TOPBAR ── */
     .topbar{display:flex;align-items:center;justify-content:space-between;padding:32px 0 28px;margin-bottom:28px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:16px;}
@@ -274,14 +302,16 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     .sub-sel:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
 
     /* ── USAGE CARDS ── */
-    .usage-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+    .usage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:24px;}
     .ucard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow-sm);transition:transform .2s,box-shadow .2s;animation:fadeUp .5s ease both;}
     .ucard:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
     .ucard::before{content:'';display:block;height:4px;}
     .ucard.wa::before{background:linear-gradient(90deg,var(--wa),var(--wa-light));}
     .ucard.em::before{background:linear-gradient(90deg,var(--em),var(--em-light));}
+    .ucard.call::before{background:linear-gradient(90deg,var(--call),var(--call-light));}
     .ucard:nth-child(1){animation-delay:.05s}
     .ucard:nth-child(2){animation-delay:.12s}
+    .ucard:nth-child(3){animation-delay:.19s}
     .ucard-inner{padding:26px 28px;}
 
     /* Card head */
@@ -289,11 +319,13 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     .ucard-ico{width:40px;height:40px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
     .ucard.wa .ucard-ico{background:var(--wa-soft);}
     .ucard.em .ucard-ico{background:var(--em-soft);}
+    .ucard.call .ucard-ico{background:var(--call-soft);}
     .ucard-ico svg{width:19px;height:19px;}
     .ucard-ttl{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text);}
     .ucard-pct{font-size:12px;font-weight:700;padding:3px 11px;border-radius:999px;margin-left:auto;}
     .ucard.wa .ucard-pct{background:var(--wa-soft);color:var(--wa);}
     .ucard.em .ucard-pct{background:var(--em-soft);color:var(--em);}
+    .ucard.call .ucard-pct{background:var(--call-soft);color:var(--call);}
     .ucard-pct.exceeded{background:var(--danger-soft)!important;color:var(--danger)!important;}
 
     /* Progress */
@@ -303,6 +335,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     .prog-fill{height:100%;border-radius:999px;transition:width 1.2s cubic-bezier(.22,1,.36,1);}
     .ucard.wa .prog-fill{background:linear-gradient(90deg,var(--wa),var(--wa-light));}
     .ucard.em .prog-fill{background:linear-gradient(90deg,var(--em),var(--em-light));}
+    .ucard.call .prog-fill{background:linear-gradient(90deg,var(--call),var(--call-light));}
     .prog-fill.exceeded{background:linear-gradient(90deg,var(--danger),#ef4444)!important;}
     .prog-midmarks{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:5px;}
 
@@ -313,6 +346,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     .utab.active{color:#fff;}
     .ucard.wa .utab.active{background:var(--wa);}
     .ucard.em .utab.active{background:var(--em);}
+    .ucard.call .utab.active{background:var(--call);}
 
     /* Metric panes */
     .metrics-pane{display:none;}
@@ -351,6 +385,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     .td-amt{font-weight:700;font-variant-numeric:tabular-nums;}
     .td-amt.wa{color:var(--wa);}
     .td-amt.em{color:var(--em);}
+    .td-amt.call{color:var(--call);}
     .td-cnt{color:var(--text2);font-size:13px;}
 
     /* Mini bar */
@@ -359,6 +394,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     .mini-fill{height:100%;border-radius:999px;}
     .mini-fill.wa{background:var(--wa);}
     .mini-fill.em{background:var(--em);}
+    .mini-fill.call{background:var(--call);}
     .mini-fill.exceeded{background:var(--danger)!important;}
     .mini-pct{font-size:11px;font-weight:600;color:var(--text2);min-width:32px;text-align:right;}
     .mini-pct.exceeded{color:var(--danger);}
@@ -423,9 +459,11 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     .dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;}
     .dot.wa{background:var(--wa);}
     .dot.em{background:var(--em);}
+    .dot.call{background:var(--call);}
     .mo-tile-cat{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
     .mo-tile-cat.wa{color:var(--wa);}
     .mo-tile-cat.em{color:var(--em);}
+    .mo-tile-cat.call{color:var(--call);}
     .mo-tile-amt{font-family:'DM Serif Display',serif;font-size:22px;color:var(--text);}
     .mo-tile-cnt{font-size:12px;color:var(--text2);margin-top:3px;}
     .mo-tile-arrow{width:32px;height:32px;border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;border:1px solid var(--border);color:var(--text3);flex-shrink:0;transition:background .15s,color .15s,border-color .15s;}
@@ -434,8 +472,12 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
     /* modal cat label */
     .modal-cat{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
     .modal-cat.wa{color:var(--wa);}
-    .modal-cat.em{color:var(--em);} 
+    .modal-cat.em{color:var(--em);}
+    .modal-cat.call{color:var(--call);}
 
+    @media(max-width:900px){
+        .usage-grid{grid-template-columns:1fr 1fr;}
+    }
     @media(max-width:700px){
         .usage-grid{grid-template-columns:1fr;}
         .metrics-pane.active{grid-template-columns:1fr 1fr;}
@@ -501,6 +543,19 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
                 'remA'  => $initialData['emailRemainingAmount'],
                 'rate'  => 'RM 0.005 / email',
                 'icon'  => '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+            ],
+            'call' => [
+                'cls'   => 'call',
+                'label' => 'Call',
+                'pct'   => $initialData['callPercent'],
+                'credit'=> $initialData['callCredit'],
+                'usedC' => $initialData['callUsedCredit'],
+                'remC'  => $initialData['callRemainingCredit'],
+                'total' => $initialData['callAmount'],
+                'usedA' => $initialData['callUsedAmount'],
+                'remA'  => $initialData['callRemainingAmount'],
+                'rate'  => 'RM 0.054 / min',
+                'icon'  => '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.63 19.79 19.79 0 010 2H3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L4.09 9.9a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>',
             ],
         ];
         foreach ($cards as $c):
@@ -609,14 +664,17 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
                             <th>WA Usage</th>
                             <th class="r">Email Spent</th>
                             <th>Email Usage</th>
+                            <th class="r">Call Spent</th>
+                            <th>Call Usage</th>
                             <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($subRows as $i => $r):
-                            $active = ($r['waUsed'] + $r['emUsed']) > 0;
-                            $waExc  = $r['waPct'] >= 100;
-                            $emExc  = $r['emPct'] >= 100;
+                            $active   = ($r['waUsed'] + $r['emUsed'] + $r['callUsed']) > 0;
+                            $waExc    = $r['waPct']   >= 100;
+                            $emExc    = $r['emPct']   >= 100;
+                            $callExc  = $r['callPct'] >= 100;
                         ?>
                         <tr style="cursor:default">
                             <td style="color:var(--text3);font-size:13px"><?php echo $i + 1; ?></td>
@@ -636,6 +694,13 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed']) <=> ($a['waUsed'] + 
                                 <div class="mini-bar-wrap">
                                     <div class="mini-bar"><div class="mini-fill em <?php echo $emExc ? 'exceeded' : ''; ?>" style="width:<?php echo $r['emPct']; ?>%"></div></div>
                                     <span class="mini-pct <?php echo $emExc ? 'exceeded' : ''; ?>"><?php echo $r['emPct']; ?>%</span>
+                                </div>
+                            </td>
+                            <td class="td-amt call r">RM <?php echo number_format($r['callUsed'], 2); ?></td>
+                            <td>
+                                <div class="mini-bar-wrap">
+                                    <div class="mini-bar"><div class="mini-fill call <?php echo $callExc ? 'exceeded' : ''; ?>" style="width:<?php echo $r['callPct']; ?>%"></div></div>
+                                    <span class="mini-pct <?php echo $callExc ? 'exceeded' : ''; ?>"><?php echo $r['callPct']; ?>%</span>
                                 </div>
                             </td>
                             <td>
@@ -767,15 +832,16 @@ function formatDate(d) { return d.toLocaleDateString('en-MY', {day:'numeric', mo
 
 // ── Apply card metrics + progress ──
 function applyCard(cls, d) {
-    const isWa = cls === 'wa';
-    const pct  = isWa ? d.whatsappPercent          : d.emailPercent;
-    const remC = isWa ? d.whatsappRemainingCredit  : d.emailRemainingCredit;
-    const remA = isWa ? d.whatsappRemainingAmount  : d.emailRemainingAmount;
+    const isWa   = cls === 'wa';
+    const isCall = cls === 'call';
+    const pct  = isWa ? d.whatsappPercent         : isCall ? d.callPercent         : d.emailPercent;
+    const remC = isWa ? d.whatsappRemainingCredit : isCall ? d.callRemainingCredit : d.emailRemainingCredit;
+    const remA = isWa ? d.whatsappRemainingAmount : isCall ? d.callRemainingAmount : d.emailRemainingAmount;
     const exc  = pct >= 100;
-    const totC = isWa ? d.whatsappCredit           : d.emailCredit;
-    const usedC= isWa ? d.whatsappUsedCredit       : d.emailUsedCredit;
-    const totA = isWa ? d.whatsappAmount           : d.emailAmount;
-    const usedA= isWa ? d.whatsappUsedAmount       : d.emailUsedAmount;
+    const totC = isWa ? d.whatsappCredit          : isCall ? d.callCredit          : d.emailCredit;
+    const usedC= isWa ? d.whatsappUsedCredit      : isCall ? d.callUsedCredit      : d.emailUsedCredit;
+    const totA = isWa ? d.whatsappAmount          : isCall ? d.callAmount          : d.emailAmount;
+    const usedA= isWa ? d.whatsappUsedAmount      : isCall ? d.callUsedAmount      : d.emailUsedAmount;
 
     const pctEl = document.getElementById('pct-' + cls);
     pctEl.textContent = pct + '% used';
@@ -884,7 +950,7 @@ function filterAndRender() {
     hint.textContent = label;
 
     let html = '';
-    [['whatsapp','wa','WhatsApp'], ['email','em','Email']].forEach(([key, cls, lbl]) => {
+    [['whatsapp','wa','WhatsApp'], ['email','em','Email'], ['call','call','Call']].forEach(([key, cls, lbl]) => {
         const d = aggregated[key];
         if (!d || d.count === 0) return;
         html += `
@@ -920,6 +986,7 @@ document.getElementById('subSel').addEventListener('change', function () {
 
     applyCard('wa', d);
     applyCard('em', d);
+    applyCard('call', d);
 
     const isAll = key === '';
     document.getElementById('subPanel').style.display   = isAll ? '' : 'none';
@@ -939,8 +1006,8 @@ function openTxModal(cat, rangeLabel) {
     const t   = agg[cat];
     if (!t) return;
 
-    const cls = cat === 'whatsapp' ? 'wa' : 'em';
-    const lbl = cat === 'whatsapp' ? 'WhatsApp' : 'Email';
+    const cls = cat === 'whatsapp' ? 'wa' : cat === 'call' ? 'call' : 'em';
+    const lbl = cat === 'whatsapp' ? 'WhatsApp' : cat === 'call' ? 'Call' : 'Email';
 
     document.getElementById('txModalCat').className   = 'modal-cat ' + cls;
     document.getElementById('txModalCat').innerHTML   = `<span class="dot ${cls}"></span>${lbl}`;

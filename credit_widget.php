@@ -3,6 +3,7 @@
  * GHL Credits Dashboard – Redesigned
  * Design: DM Sans + DM Serif Display, warm neutral palette.
  * Fix: remaining credits/amount shows negative (red) when exceeded.
+ * currently using for other sub accounts
  */
 
 $targetLocationId = isset($_GET['locationId']) ? trim($_GET['locationId']) : '';
@@ -30,12 +31,14 @@ function getCreditLimits($filePath, $targetLocationId = null) {
     $locationIdIndex     = false;
     $whatsappCreditIndex = false;
     $emailCreditIndex    = false;
+    $callCreditIndex     = false;
 
     foreach ($header as $index => $column) {
         $col = strtolower(trim($column));
         if ($col === 'locationid') $locationIdIndex = $index;
         if ($col === 'totalamount' || $col === 'whatsappcredits') $whatsappCreditIndex = $index;
         if ($col === 'emailcredits') $emailCreditIndex = $index;
+        if ($col === 'callcredits') $callCreditIndex = $index;
     }
     if ($locationIdIndex === false) { fclose($file); return $creditLimits; }
 
@@ -46,6 +49,7 @@ function getCreditLimits($filePath, $targetLocationId = null) {
         $creditLimits[$locationId] = [
             'whatsappCredit' => $whatsappCreditIndex !== false ? floatval($row[$whatsappCreditIndex] ?? 0) : 0,
             'emailCredit'    => $emailCreditIndex    !== false ? floatval($row[$emailCreditIndex]    ?? 0) : 0,
+            'callCredit'     => $callCreditIndex     !== false ? floatval($row[$callCreditIndex]     ?? 0) : 0,
         ];
     }
     fclose($file);
@@ -89,6 +93,8 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
                 $category = 'whatsapp'; $creditAmount = 0.50;
             } elseif (stripos($type, 'Emails') !== false || stripos($description, 'emails') !== false) {
                 $category = 'email'; $creditAmount = 0.005;
+            } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
+                $category = 'call'; $creditAmount = floatval($row[$amountIndex]);
             } else {
                 continue;
             }
@@ -96,12 +102,13 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
             $locationName = $locationNameIndex !== false && !empty($row[$locationNameIndex]) ? trim($row[$locationNameIndex]) : $locationId;
 
             if (!isset($results[$locationId])) {
-                $results[$locationId] = ['locationName' => $locationName, 'emailAmount' => 0, 'whatsappAmount' => 0,
-                    'emailCount' => 0, 'whatsappCount' => 0, 'monthlyData' => []];
+                $results[$locationId] = ['locationName' => $locationName, 'emailAmount' => 0, 'whatsappAmount' => 0, 'callAmount' => 0,
+                    'emailCount' => 0, 'whatsappCount' => 0, 'callCount' => 0, 'monthlyData' => []];
             }
 
             if ($category === 'email')     { $results[$locationId]['emailAmount']     += $creditAmount; $results[$locationId]['emailCount']++; }
             if ($category === 'whatsapp')  { $results[$locationId]['whatsappAmount']  += $creditAmount; $results[$locationId]['whatsappCount']++; }
+            if ($category === 'call')      { $results[$locationId]['callAmount']      += $creditAmount; $results[$locationId]['callCount']++; }
 
             if ($dateIndex !== false && !empty($row[$dateIndex])) {
                 $dateStr = preg_replace('/(st|nd|rd|th)/', '', $row[$dateIndex]);
@@ -148,35 +155,48 @@ $subaccountData = [];
 foreach ($processedData as $locationId => $data) {
     $emailUsedAmountRm    = $data['emailAmount'];
     $whatsappUsedAmountRm = $data['whatsappAmount'];
+    $callUsedAmountRm     = $data['callAmount'];
     $whatsappCredit       = $creditLimits[$locationId]['whatsappCredit'] ?? 0;
     $emailCredit          = $creditLimits[$locationId]['emailCredit']    ?? 0;
+    $callCredit           = $creditLimits[$locationId]['callCredit']     ?? 0;
     $whatsappAmountRm     = $whatsappCredit / 2;
     $emailAmountRm        = $emailCredit * 0.005;
+    $callAmountRm         = $callCredit * 0.054;
     $emailUsedCredit      = $emailUsedAmountRm    / 0.005;
     $whatsappUsedCredit   = $whatsappUsedAmountRm / 0.50;
+    $callUsedCredit       = $callUsedAmountRm     / 0.054;
 
     // NO max(0,...) — allow negative to show overuse
     $emailRemainingCredit    = $emailCredit    - $emailUsedCredit;
     $whatsappRemainingCredit = $whatsappCredit - $whatsappUsedCredit;
+    $callRemainingCredit     = $callCredit     - $callUsedCredit;
     $emailRemainingAmount    = $emailAmountRm    - $emailUsedAmountRm;
     $whatsappRemainingAmount = $whatsappAmountRm - $whatsappUsedAmountRm;
+    $callRemainingAmount     = $callAmountRm     - $callUsedAmountRm;
 
     $subaccountData[$locationId] = [
         'name'                    => $data['locationName'],
         'emailCredit'             => $emailCredit,
         'whatsappCredit'          => $whatsappCredit,
+        'callCredit'              => $callCredit,
         'emailUsedCredit'         => $emailUsedCredit,
         'whatsappUsedCredit'      => $whatsappUsedCredit,
+        'callUsedCredit'          => $callUsedCredit,
         'emailRemainingCredit'    => $emailRemainingCredit,
         'whatsappRemainingCredit' => $whatsappRemainingCredit,
+        'callRemainingCredit'     => $callRemainingCredit,
         'emailAmount'             => $emailAmountRm,
         'whatsappAmount'          => $whatsappAmountRm,
+        'callAmount'              => $callAmountRm,
         'emailUsedAmount'         => $emailUsedAmountRm,
         'whatsappUsedAmount'      => $whatsappUsedAmountRm,
+        'callUsedAmount'          => $callUsedAmountRm,
         'emailRemainingAmount'    => $emailRemainingAmount,
         'whatsappRemainingAmount' => $whatsappRemainingAmount,
+        'callRemainingAmount'     => $callRemainingAmount,
         'emailPercent'            => $emailAmountRm    > 0 ? min(100, round($emailUsedAmountRm    / $emailAmountRm    * 100)) : 0,
         'whatsappPercent'         => $whatsappAmountRm > 0 ? min(100, round($whatsappUsedAmountRm / $whatsappAmountRm * 100)) : 0,
+        'callPercent'             => $callAmountRm     > 0 ? min(100, round($callUsedAmountRm     / $callAmountRm     * 100)) : 0,
         'monthlyData'             => $data['monthlyData'],
     ];
 }
@@ -215,6 +235,9 @@ function fmtSigned($val, $decimals = 0) {
         --em:          #1e6fa8;
         --em-light:    #3b82f6;
         --em-soft:     rgba(30,111,168,0.09);
+        --call:        #d97706;
+        --call-light:  #f59e0b;
+        --call-soft:   rgba(217,119,6,0.09);
         --accent:      #7c3aed;
         --accent-soft: rgba(124,58,237,0.08);
         --danger:      #dc2626;
@@ -236,7 +259,7 @@ function fmtSigned($val, $decimals = 0) {
     body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
         background:radial-gradient(ellipse 70% 50% at 10% 0%,rgba(37,211,102,0.04) 0%,transparent 60%),
                    radial-gradient(ellipse 50% 40% at 90% 100%,rgba(30,111,168,0.03) 0%,transparent 60%);}
-    .wrap{max-width:960px;margin:0 auto;padding:0 28px;position:relative;z-index:1;}
+    .wrap{max-width:1250px;margin:0 auto;padding:0 28px;position:relative;z-index:1;}
 
     /* TOPBAR */
     .topbar{display:flex;align-items:center;justify-content:space-between;padding:32px 0 28px;margin-bottom:28px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:16px;}
@@ -248,7 +271,7 @@ function fmtSigned($val, $decimals = 0) {
     .id-chip{font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);border-radius:var(--r-xs);padding:6px 14px;box-shadow:var(--shadow-sm);}
 
     /* GRID */
-    .usage-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+    .usage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:24px;}
 
     /* USAGE CARD */
     .ucard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;animation:fadeUp .5s ease both;}
@@ -256,8 +279,10 @@ function fmtSigned($val, $decimals = 0) {
     .ucard::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:var(--r) var(--r) 0 0;}
     .ucard.wa::before{background:linear-gradient(90deg,var(--wa),var(--wa-light));}
     .ucard.em::before{background:linear-gradient(90deg,var(--em),var(--em-light));}
+    .ucard.call::before{background:linear-gradient(90deg,var(--call),var(--call-light));}
     .ucard:nth-child(1){animation-delay:.05s}
     .ucard:nth-child(2){animation-delay:.12s}
+    .ucard:nth-child(3){animation-delay:.19s}
 
     .ucard-inner{padding:26px 28px;}
 
@@ -266,11 +291,13 @@ function fmtSigned($val, $decimals = 0) {
     .ucard-ico{width:40px;height:40px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
     .ucard.wa .ucard-ico{background:var(--wa-soft);}
     .ucard.em .ucard-ico{background:var(--em-soft);}
+    .ucard.call .ucard-ico{background:var(--call-soft);}
     .ucard-ico svg{width:19px;height:19px;}
     .ucard-ttl{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text);}
     .ucard-pct{font-size:12px;font-weight:700;padding:3px 11px;border-radius:999px;margin-left:auto;}
     .ucard.wa .ucard-pct{background:var(--wa-soft);color:var(--wa);}
     .ucard.em .ucard-pct{background:var(--em-soft);color:var(--em);}
+    .ucard.call .ucard-pct{background:var(--call-soft);color:var(--call);}
     .ucard-pct.exceeded{background:var(--danger-soft);color:var(--danger);}
 
     /* PROGRESS */
@@ -280,6 +307,7 @@ function fmtSigned($val, $decimals = 0) {
     .prog-fill{height:100%;border-radius:999px;transition:width 1.2s cubic-bezier(.22,1,.36,1);}
     .ucard.wa .prog-fill{background:linear-gradient(90deg,var(--wa),var(--wa-light));}
     .ucard.em .prog-fill{background:linear-gradient(90deg,var(--em),var(--em-light));}
+    .ucard.call .prog-fill{background:linear-gradient(90deg,var(--call),var(--call-light));}
     .prog-fill.exceeded{background:linear-gradient(90deg,var(--danger),#ef4444);}
     .prog-midmarks{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:5px;}
 
@@ -290,6 +318,7 @@ function fmtSigned($val, $decimals = 0) {
     .utab.active{color:#fff;}
     .ucard.wa .utab.active{background:var(--wa);}
     .ucard.em .utab.active{background:var(--em);}
+    .ucard.call .utab.active{background:var(--call);}
 
     /* METRICS */
     .metrics-pane{display:none;}
@@ -320,9 +349,11 @@ function fmtSigned($val, $decimals = 0) {
     .dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;}
     .dot.wa{background:var(--wa);}
     .dot.em{background:var(--em);}
+    .dot.call{background:var(--call);}
     .mo-tile-cat{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
     .mo-tile-cat.wa{color:var(--wa);}
     .mo-tile-cat.em{color:var(--em);}
+    .mo-tile-cat.call{color:var(--call);}
     .mo-tile-amt{font-family:'DM Serif Display',serif;font-size:22px;color:var(--text);}
     .mo-tile-cnt{font-size:12px;color:var(--text2);margin-top:3px;}
     .mo-tile-arrow{width:32px;height:32px;border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;border:1px solid var(--border);color:var(--text3);flex-shrink:0;transition:background .15s,color .15s,border-color .15s;}
@@ -337,6 +368,7 @@ function fmtSigned($val, $decimals = 0) {
     .modal-cat{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
     .modal-cat.wa{color:var(--wa);}
     .modal-cat.em{color:var(--em);}
+    .modal-cat.call{color:var(--call);}
     .modal-ttl{font-family:'DM Serif Display',serif;font-size:20px;color:var(--text);line-height:1.2;}
     .modal-meta{font-size:13px;color:var(--text2);margin-top:4px;}
     .modal-close{width:34px;height:34px;border-radius:var(--r-xs);border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;line-height:1;flex-shrink:0;}
@@ -362,12 +394,16 @@ function fmtSigned($val, $decimals = 0) {
     .td-amt{font-weight:700;font-variant-numeric:tabular-nums;}
     .td-amt.wa{color:var(--wa);}
     .td-amt.em{color:var(--em);}
+    .td-amt.call{color:var(--call);}
 
     @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
     ::-webkit-scrollbar{width:5px;height:5px;}
     ::-webkit-scrollbar-track{background:transparent;}
     ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:999px;}
 
+    @media(max-width:900px){
+        .usage-grid{grid-template-columns:1fr 1fr;}
+    }
     @media(max-width:640px){
         .usage-grid,.mo-tiles,.modal-summary{grid-template-columns:1fr;}
         .metrics-pane.active{grid-template-columns:1fr 1fr;}
@@ -426,6 +462,19 @@ function fmtSigned($val, $decimals = 0) {
                 'remA'   => $initialData['emailRemainingAmount'],
                 'rate'   => 'RM 0.005 / email',
                 'icon'   => '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+            ],
+            'call' => [
+                'cls'    => 'call',
+                'label'  => 'Call',
+                'pct'    => $initialData['callPercent'],
+                'credit' => $initialData['callCredit'],
+                'usedC'  => $initialData['callUsedCredit'],
+                'remC'   => $initialData['callRemainingCredit'],
+                'total'  => $initialData['callAmount'],
+                'usedA'  => $initialData['callUsedAmount'],
+                'remA'   => $initialData['callRemainingAmount'],
+                'rate'   => 'RM 0.054 / min',
+                'icon'   => '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.63 19.79 19.79 0 010 2H3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L4.09 9.9a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>',
             ],
         ];
         foreach ($cards as $c):
@@ -641,7 +690,7 @@ picker.addEventListener('change', () => {
     const mName = dt.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
     let html = '';
-    [['whatsapp','wa','WhatsApp'], ['email','em','Email']].forEach(([key, cls, label]) => {
+    [['whatsapp','wa','WhatsApp'], ['email','em','Email'], ['call','call','Call']].forEach(([key, cls, label]) => {
         const d = types[key];
         if (!d) return;
         html += `
@@ -665,8 +714,8 @@ picker.addEventListener('change', () => {
 // ── Open modal ──
 function openModal(mKey, cat, mName) {
     const d   = ((monthlyData[mKey] || {}).types || {})[cat];
-    const cls = cat === 'whatsapp' ? 'wa' : 'em';
-    const lbl = cat === 'whatsapp' ? 'WhatsApp' : 'Email';
+    const cls = cat === 'whatsapp' ? 'wa' : cat === 'call' ? 'call' : 'em';
+    const lbl = cat === 'whatsapp' ? 'WhatsApp' : cat === 'call' ? 'Call' : 'Email';
     if (!d) return;
 
     document.getElementById('modalCat').className   = 'modal-cat ' + cls;
