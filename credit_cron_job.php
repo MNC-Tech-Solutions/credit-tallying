@@ -237,7 +237,9 @@ try {
             echo json_encode(['status' => 'error', 'reason' => 'invalid JSON body']);
             exit;
         }
-        $rawBody = $decoded['raw_body'] ?? [];
+        $rawBody = isset($decoded['raw_body']) ? $decoded['raw_body'] : $decoded;
+        logMsg('INFO', 'Mode: HTTP — POST received');
+        logMsg('INFO', 'POST body: ' . json_encode($decoded));
     }
 
     // Trigger word validation
