@@ -61,9 +61,9 @@ function getCreditLimits(string $filePath): array {
         if (empty($row[$idxId])) continue;
         $locId = trim($row[$idxId]);
         $limits[$locId] = [
-            'WhatsApp' => $idxWa   !== false ? floatval($row[$idxWa]   ?? 0) : 0,
-            'Email'    => $idxEm   !== false ? floatval($row[$idxEm]   ?? 0) : 0,
-            'Call'     => $idxCall !== false ? floatval($row[$idxCall] ?? 0) : 0,
+            'WhatsApp' => $idxWa   !== false ? floatval($row[$idxWa]   ?? 0) * 0.50  : 0,
+            'Email'    => $idxEm   !== false ? floatval($row[$idxEm]   ?? 0) * 0.005 : 0,
+            'Call'     => $idxCall !== false ? floatval($row[$idxCall] ?? 0)          : 0,
         ];
     }
     fclose($file);
@@ -130,8 +130,9 @@ function aggregateUsage(array $transactions): array {
 }
 
 function buildAlerts(array $usage, array $names, array $credits): array {
-    $alerts  = [];
-    $summary = [];
+    $alerts         = [];
+    $summaryNoBudget = [];
+    $summaryOverThreshold = [];
     foreach ($usage as $locId => $types) {
         foreach ($types as $usageType => $totalUsed) {
             if (!isset($credits[$locId])) {
@@ -143,19 +144,28 @@ function buildAlerts(array $usage, array $names, array $credits): array {
                 logMsg('WARN', "No budget entry found for ($locId, $usageType) — skipping");
                 continue;
             }
+            $name = $names[$locId] ?? $locId;
             if ($budget <= 0) {
-                logMsg('WARN', "Budget is zero/null for ($locId, $usageType) — skipping to avoid division by zero");
+                if ($totalUsed > 0) {
+                    $alerts[]          = ['location_id' => $locId, 'location_name' => $name, 'usage_type' => $usageType];
+                    $summaryNoBudget[] = "- $name ($usageType): no budget allocated but credits used";
+                }
                 continue;
             }
-            $pct  = round(($totalUsed / $budget) * 100, 2);
-            $name = $names[$locId] ?? $locId;
+            $pct = round(($totalUsed / $budget) * 100, 2);
             if ($pct >= THRESHOLD_PERCENT) {
-                $alerts[]  = ['location_id' => $locId, 'location_name' => $name, 'usage_type' => $usageType];
-                $summary[] = "- $name ($usageType): $pct% of credits used";
+                $alerts[]               = ['location_id' => $locId, 'location_name' => $name, 'usage_type' => $usageType];
+                $summaryOverThreshold[] = "- $name ($usageType): $pct% of credits used";
             }
         }
     }
-    return ['alerts' => $alerts, 'summary' => implode('<br>', $summary)];
+
+    $parts = [];
+    if ($summaryNoBudget)     $parts[] = implode('<br>', $summaryNoBudget);
+    if ($summaryOverThreshold) $parts[] = implode('<br>', $summaryOverThreshold);
+    $summary = implode('<br><br>', $parts);
+
+    return ['alerts' => $alerts, 'summary' => $summary];
 }
 
 function buildPayload(array $rawBody, array $alerts, string $alertsSummary): array {
