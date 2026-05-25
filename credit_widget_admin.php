@@ -7,66 +7,117 @@
  */
 ini_set('memory_limit', '512M');
 
+function getDb(): PDO {
+    static $db = null;
+    if ($db instanceof PDO) return $db;
+
+    $host = getenv('DB_HOST') ?: 'ghl-credits-db.cr0yeukuujnk.ap-southeast-1.rds.amazonaws.com';
+    $name = getenv('DB_NAME') ?: 'ghlcredits';
+    $user = getenv('DB_USER') ?: 'admin';
+    $pass = getenv('DB_PASS') ?: 'ghlcredits123';
+
+    $db = new PDO(
+        "mysql:host={$host};dbname={$name};charset=utf8mb4",
+        $user,
+        $pass,
+        [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
+    return $db;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function getCsvFiles($directory) {
-    if (!is_dir($directory)) return [];
-    return glob($directory . '/*.csv') ?: [];
+    return [];
 }
 
 function getCreditLimits($filePath) {
     $limits = [];
-    if (!file_exists($filePath)) return $limits;
-    $file = fopen($filePath, 'r');
-    if (!$file) return $limits;
-    $header = fgetcsv($file);
-    if (!$header) { fclose($file); return $limits; }
-
-    $idxId = $idxWa = $idxEm = $idxCall = false;
-    foreach ($header as $i => $col) {
-        $col = strtolower(trim($col));
-        if ($col === 'locationid' || $col === 'location id') $idxId = $i;
-        if ($col === 'totalamount' || $col === 'whatsappcredits') $idxWa = $i;
-        if ($col === 'emailcredits') $idxEm = $i;
-        if ($col === 'callcredits') $idxCall = $i;
-    }
-    if ($idxId === false) { fclose($file); return $limits; }
-
-    while (($row = fgetcsv($file)) !== false) {
-        if (empty($row[$idxId])) continue;
-        $locId = trim($row[$idxId]);
+    $stmt = getDb()->query('SELECT location_id, wa_credits, email_credits FROM credit_limits');
+    while ($row = $stmt->fetch()) {
+        $locId = trim($row['location_id'] ?? '');
+        if ($locId === '') continue;
         $limits[$locId] = [
-            'whatsappCredit' => $idxWa   !== false ? floatval($row[$idxWa]   ?? 0) : 0,
-            'emailCredit'    => $idxEm   !== false ? floatval($row[$idxEm]   ?? 0) : 0,
-            'callCredit'     => $idxCall !== false ? floatval($row[$idxCall] ?? 0) : 0,
+            'whatsappCredit' => floatval($row['wa_credits'] ?? 0),
+            'emailCredit'    => floatval($row['email_credits'] ?? 0),
+            'callCredit'     => 0,
         ];
     }
-    fclose($file);
     return $limits;
 }
 
 function processCsvFiles($csvFiles) {
     $results = [];
-    foreach ($csvFiles as $filePath) {
-        if (basename($filePath) === 'total_credits.csv') continue;
-        if (!file_exists($filePath)) continue;
-        $file = fopen($filePath, 'r');
-        if (!$file) continue;
-        $header = fgetcsv($file);
-        if (!$header) { fclose($file); continue; }
+    $stmt = getDb()->query('SELECT location_id, location_name, type, description, tx_date, amount FROM transactions');
+    while ($row = $stmt->fetch()) {
+        if (empty($row['location_id']) || empty($row['type'])) continue;
+        $locId = trim($row['location_id']);
+        $type  = trim($row['type']);
+        $desc  = strtolower(trim($row['description'] ?? ''));
 
-        $idxId = $idxName = $idxType = $idxAmt = $idxDate = $idxDesc = false;
-        foreach ($header as $i => $col) {
-            $col = strtolower(trim($col));
-            if ($col === 'locationid'   || $col === 'location id')   $idxId   = $i;
-            if ($col === 'locationname' || $col === 'location name') $idxName = $i;
-            if ($col === 'type'         || $col === 'transaction type') $idxType = $i;
-            if ($col === 'amount')       $idxAmt  = $i;
-            if ($col === 'date'         || $col === 'activity date') $idxDate = $i;
-            if ($col === 'description')  $idxDesc = $i;
+        if (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
+            $cat = 'whatsapp'; $cost = 0.50;
+        } elseif (stripos($type, 'Emails') !== false || stripos($desc, 'emails') !== false) {
+            $cat = 'email'; $cost = 0.005;
+        } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
+            $cat = 'call'; $cost = floatval($row['amount'] ?? 0);
+        } else {
+            continue;
         }
-        if ($idxId === false || $idxAmt === false || $idxType === false) { fclose($file); continue; }
 
+        $locName = !empty($row['location_name']) ? trim($row['location_name']) : $locId;
+
+        if (!isset($results[$locId])) {
+            $results[$locId] = [
+                'locationName'   => $locName,
+                'emailAmount'    => 0, 'whatsappAmount' => 0, 'callAmount'    => 0,
+                'emailCount'     => 0, 'whatsappCount'  => 0, 'callCount'     => 0,
+                'monthlyData'    => [],
+            ];
+        }
+
+        if ($cat === 'email') {
+            $results[$locId]['emailAmount']    += $cost;
+            $results[$locId]['emailCount']++;
+        } elseif ($cat === 'whatsapp') {
+            $results[$locId]['whatsappAmount'] += $cost;
+            $results[$locId]['whatsappCount']++;
+        } else {
+            $results[$locId]['callAmount']     += $cost;
+            $results[$locId]['callCount']++;
+        }
+
+        if (!empty($row['tx_date'])) {
+            $ds   = preg_replace('/(st|nd|rd|th)/', '', $row['tx_date']);
+            $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($ds));
+            if ($date) {
+                $mk = $date->format('Y-m');
+                if (!isset($results[$locId]['monthlyData'][$mk]))
+                    $results[$locId]['monthlyData'][$mk] = ['types' => []];
+                if (!isset($results[$locId]['monthlyData'][$mk]['types'][$cat]))
+                    $results[$locId]['monthlyData'][$mk]['types'][$cat] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
+                $results[$locId]['monthlyData'][$mk]['types'][$cat]['totalAmount'] += $cost;
+                $results[$locId]['monthlyData'][$mk]['types'][$cat]['count']++;
+                $results[$locId]['monthlyData'][$mk]['types'][$cat]['transactions'][] = [
+                    'date'         => $row['tx_date'],
+                    'amount'       => $cost,
+                    'originalType' => $type,
+                ];
+            }
+        }
+    }
+    return $results;
+
+}
+
+function displayError($msg) {
+    die("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><link href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=DM+Serif+Display&display=swap' rel='stylesheet'></head><body style='background:#f5f4f1;font-family:DM Sans,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;'><div style='background:#fff;border:1px solid #e8e5e0;border-radius:20px;padding:48px 40px;text-align:center;max-width:420px;box-shadow:0 4px 16px rgba(0,0,0,0.07);'><div style='font-size:40px;margin-bottom:12px;'>âš ï¸</div><h2 style='font-family:DM Serif Display,serif;color:#1a1916;margin:0 0 8px;font-size:22px;'>$msg</h2></div></body></html>");
+}
+
+/*
         while (($row = fgetcsv($file)) !== false) {
             if (empty($row[$idxId]) || !isset($row[$idxAmt]) || empty($row[$idxType])) continue;
             $locId = trim($row[$idxId]);
@@ -130,18 +181,16 @@ function processCsvFiles($csvFiles) {
     return $results;
 }
 
-function displayError($msg) {
+function displayErrorDisabled($msg) {
     die("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><link href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=DM+Serif+Display&display=swap' rel='stylesheet'></head><body style='background:#f5f4f1;font-family:DM Sans,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;'><div style='background:#fff;border:1px solid #e8e5e0;border-radius:20px;padding:48px 40px;text-align:center;max-width:420px;box-shadow:0 4px 16px rgba(0,0,0,0.07);'><div style='font-size:40px;margin-bottom:12px;'>⚠️</div><h2 style='font-family:DM Serif Display,serif;color:#1a1916;margin:0 0 8px;font-size:22px;'>$msg</h2></div></body></html>");
 }
 
 // ─── Main Processing ─────────────────────────────────────────────────────────
 
-$csvDirectory     = __DIR__ . '/csv_files';
-$creditLimitsFile = __DIR__ . '/total_credits.csv';
+*/
 
-$csvFiles      = getCsvFiles($csvDirectory);
-$creditLimits  = getCreditLimits($creditLimitsFile);
-$processedData = processCsvFiles($csvFiles);
+$creditLimits  = getCreditLimits(null);
+$processedData = processCsvFiles([]);
 
 if (empty($processedData)) displayError("No valid data found. Please check the csv_files folder.");
 
