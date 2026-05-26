@@ -8,8 +8,6 @@ ini_set('memory_limit', '512M');
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
-define('TRANSACTIONS_DIR',  __DIR__ . '/csv_files');
-define('TOTAL_CREDITS_CSV', __DIR__ . '/total_credits.csv');
 define('ALERT_WEBHOOK_URL', 'https://services.leadconnectorhq.com/hooks/BXuCudh2EKUEmv1gC4ai/webhook-trigger/9599e28d-0783-43f9-9646-a14396316e75');
 define('THRESHOLD_PERCENT', 80);
 
@@ -31,100 +29,64 @@ function logMsg(string $level, string $msg): void {
     }
 }
 
-// ─── CSV helpers (mirroring credit_widget_admin.php) ─────────────────────────
+// ─── RDS helpers ─────────────────────────────────────────────────────────────
 
-function getCreditLimits(string $filePath): array {
+function getDb(): PDO {
+    static $db = null;
+    if ($db instanceof PDO) return $db;
+    $host = getenv('DB_HOST') ?: 'ghl-credits-db.cr0yeukuujnk.ap-southeast-1.rds.amazonaws.com';
+    $name = getenv('DB_NAME') ?: 'ghlcredits';
+    $user = getenv('DB_USER') ?: 'admin';
+    $pass = getenv('DB_PASS') ?: 'ghlcredits123';
+    $db = new PDO("mysql:host={$host};dbname={$name};charset=utf8mb4", $user, $pass, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    return $db;
+}
+
+// Returns ['WhatsApp' => RM budget, 'Email' => RM budget, 'Call' => RM budget] per location
+function getCreditLimits(): array {
     $limits = [];
-    if (!file_exists($filePath)) {
-        logMsg('ERROR', "Credit limits file not found: $filePath");
-        return $limits;
-    }
-    $file = fopen($filePath, 'r');
-    if (!$file) {
-        logMsg('ERROR', "Cannot open credit limits file: $filePath");
-        return $limits;
-    }
-    $header = fgetcsv($file);
-    if (!$header) { fclose($file); return $limits; }
-
-    $idxId = $idxWa = $idxEm = $idxCall = false;
-    foreach ($header as $i => $col) {
-        $col = strtolower(trim($col));
-        if ($col === 'locationid'  || $col === 'location id')    $idxId   = $i;
-        if ($col === 'totalamount' || $col === 'whatsappcredits') $idxWa  = $i;
-        if ($col === 'emailcredits')                              $idxEm   = $i;
-        if ($col === 'callcredits')                               $idxCall = $i;
-    }
-    if ($idxId === false) { fclose($file); return $limits; }
-
-    while (($row = fgetcsv($file)) !== false) {
-        if (empty($row[$idxId])) continue;
-        $locId = trim($row[$idxId]);
+    $stmt = getDb()->query('SELECT location_id, wa_credits, email_credits, call_credits FROM credit_limits');
+    while ($row = $stmt->fetch()) {
+        $locId = trim($row['location_id']);
         $limits[$locId] = [
-            'WhatsApp' => $idxWa   !== false ? floatval($row[$idxWa]   ?? 0) * 0.50  : 0,
-            'Email'    => $idxEm   !== false ? floatval($row[$idxEm]   ?? 0) * 0.005 : 0,
-            'Call'     => $idxCall !== false ? floatval($row[$idxCall] ?? 0)          : 0,
+            'WhatsApp' => floatval($row['wa_credits'])    * 0.50,
+            'Email'    => floatval($row['email_credits'])  * 0.005,
+            'Call'     => floatval($row['call_credits'])   * 0.054,
         ];
     }
-    fclose($file);
     return $limits;
 }
 
-function getTransactions(string $dir): array {
-    $rows = [];
-    $files = glob($dir . '/*.csv') ?: [];
-    foreach ($files as $filePath) {
-        if (basename($filePath) === 'total_credits.csv') continue;
-        if (!file_exists($filePath)) continue;
-        $file = fopen($filePath, 'r');
-        if (!$file) continue;
-        $header = fgetcsv($file);
-        if (!$header) { fclose($file); continue; }
-
-        $idxId = $idxName = $idxType = $idxAmt = $idxDesc = false;
-        foreach ($header as $i => $col) {
-            $col = strtolower(trim($col));
-            if ($col === 'locationid'      || $col === 'location id')      $idxId   = $i;
-            if ($col === 'locationname'    || $col === 'location name')    $idxName = $i;
-            if ($col === 'type'            || $col === 'transaction type') $idxType = $i;
-            if ($col === 'amount')                                         $idxAmt  = $i;
-            if ($col === 'description')                                    $idxDesc = $i;
-        }
-        if ($idxId === false || $idxAmt === false || $idxType === false) { fclose($file); continue; }
-
-        while (($row = fgetcsv($file)) !== false) {
-            if (empty($row[$idxId]) || !isset($row[$idxAmt]) || empty($row[$idxType])) continue;
-            $locId = trim($row[$idxId]);
-            $type  = trim($row[$idxType]);
-            $desc  = $idxDesc !== false ? strtolower(trim($row[$idxDesc] ?? '')) : '';
-
-            if (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
-                $usageType = 'WhatsApp'; $cost = 0.50;
-            } elseif (stripos($type, 'Emails') !== false || stripos($desc, 'emails') !== false) {
-                $usageType = 'Email'; $cost = 0.005;
-            } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
-                $usageType = 'Call'; $cost = floatval($row[$idxAmt]);
-            } else {
-                continue;
-            }
-
-            $locName = $idxName !== false && !empty($row[$idxName]) ? trim($row[$idxName]) : $locId;
-            $rows[] = ['locationId' => $locId, 'locationName' => $locName, 'usageType' => $usageType, 'cost' => $cost];
-        }
-        fclose($file);
-    }
-    return $rows;
-}
-
-function aggregateUsage(array $transactions): array {
+// Returns usage (RM spent) and location names aggregated from transactions table
+function getUsageFromDb(): array {
     $usage = [];
     $names = [];
-    foreach ($transactions as $row) {
-        $loc  = $row['locationId'];
-        $type = $row['usageType'];
-        if (!isset($usage[$loc][$type])) $usage[$loc][$type] = 0.0;
-        $usage[$loc][$type] += $row['cost'];
-        if (!isset($names[$loc])) $names[$loc] = $row['locationName'];
+    $stmt = getDb()->query(
+        'SELECT location_id, MAX(location_name) AS location_name,
+                type, COUNT(*) AS cnt, SUM(ABS(IFNULL(amount,0))) AS sum_amount
+         FROM transactions
+         GROUP BY location_id, type'
+    );
+    while ($row = $stmt->fetch()) {
+        $locId = trim($row['location_id']);
+        $type  = trim($row['type']);
+
+        if (stripos($type, 'WhatsApp') !== false) {
+            $usageType = 'WhatsApp'; $cost = intval($row['cnt']) * 0.50;
+        } elseif (stripos($type, 'Emails') !== false) {
+            $usageType = 'Email'; $cost = intval($row['cnt']) * 0.005;
+        } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
+            $usageType = 'Call'; $cost = floatval($row['sum_amount']);
+        } else {
+            continue;
+        }
+
+        if (!isset($usage[$locId][$usageType])) $usage[$locId][$usageType] = 0.0;
+        $usage[$locId][$usageType] += $cost;
+        if (!isset($names[$locId])) $names[$locId] = trim($row['location_name'] ?? $locId);
     }
     return ['usage' => $usage, 'names' => $names];
 }
@@ -269,26 +231,15 @@ try {
     }
     logMsg('INFO', 'trigger_word: MATCH, proceeding');
 
-    // Load CSV data
-    if (!file_exists(TOTAL_CREDITS_CSV)) {
-        throw new RuntimeException('Credit limits file not found: ' . TOTAL_CREDITS_CSV);
-    }
-    if (!is_dir(TRANSACTIONS_DIR)) {
-        throw new RuntimeException('Transactions directory not found: ' . TRANSACTIONS_DIR);
-    }
+    // Load data from RDS
+    $credits = getCreditLimits();
+    $agg     = getUsageFromDb();
+    $usage   = $agg['usage'];
+    $names   = $agg['names'];
+    $pairs   = array_sum(array_map('count', $usage));
 
-    $credits      = getCreditLimits(TOTAL_CREDITS_CSV);
-    $transactions = getTransactions(TRANSACTIONS_DIR);
-
-    logMsg('INFO', sprintf('Loaded %s transaction rows from csv_files/', number_format(count($transactions))));
-    logMsg('INFO', sprintf('Loaded %s credit budget entries from total_credits.csv', number_format(count($credits))));
-
-    $agg    = aggregateUsage($transactions);
-    $usage  = $agg['usage'];
-    $names  = $agg['names'];
-    $pairs  = array_sum(array_map('count', $usage));
-    logMsg('INFO', sprintf('Grouped into %s unique (location_id, usage_type) pairs', number_format($pairs)));
-
+    logMsg('INFO', sprintf('Loaded %s credit budget entries from credit_limits table', number_format(count($credits))));
+    logMsg('INFO', sprintf('Grouped into %s unique (location_id, usage_type) pairs from transactions table', number_format($pairs)));
     $result  = buildAlerts($usage, $names, $credits);
     $alerts  = $result['alerts'];
     $payload = buildPayload($rawBody, $alerts, $result['summary']);
