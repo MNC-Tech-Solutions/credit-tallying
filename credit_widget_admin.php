@@ -43,21 +43,26 @@ function getCreditLimits() {
     return $limits;
 }
 
+// Aggregate totals per location per type — no row limit, minimal memory
 function getTransactionData() {
     $results = [];
-    $stmt = getDb()->query('SELECT location_id, location_name, type, description, tx_date, amount FROM transactions ORDER BY id DESC LIMIT 100000');
+    $stmt = getDb()->query(
+        'SELECT location_id, MAX(location_name) AS location_name,
+                type, COUNT(*) AS cnt, SUM(ABS(IFNULL(amount,0))) AS sum_amount
+         FROM transactions
+         GROUP BY location_id, type'
+    );
     while ($row = $stmt->fetch()) {
         if (empty($row['location_id']) || empty($row['type'])) continue;
         $locId = trim($row['location_id']);
         $type  = trim($row['type']);
-        $desc  = strtolower(trim($row['description'] ?? ''));
 
-        if (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
-            $cat = 'whatsapp'; $cost = 0.50;
-        } elseif (stripos($type, 'Emails') !== false || stripos($desc, 'emails') !== false) {
-            $cat = 'email'; $cost = 0.005;
+        if (stripos($type, 'WhatsApp') !== false) {
+            $cat = 'whatsapp'; $cost = intval($row['cnt']) * 0.50;
+        } elseif (stripos($type, 'Emails') !== false) {
+            $cat = 'email'; $cost = intval($row['cnt']) * 0.005;
         } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
-            $cat = 'call'; $cost = floatval($row['amount'] ?? 0);
+            $cat = 'call'; $cost = floatval($row['sum_amount']);
         } else {
             continue;
         }
@@ -74,14 +79,38 @@ function getTransactionData() {
         }
 
         if ($cat === 'email') {
-            $results[$locId]['emailAmount']    += $cost;
-            $results[$locId]['emailCount']++;
+            $results[$locId]['emailAmount']  += $cost;
+            $results[$locId]['emailCount']   += intval($row['cnt']);
         } elseif ($cat === 'whatsapp') {
             $results[$locId]['whatsappAmount'] += $cost;
-            $results[$locId]['whatsappCount']++;
+            $results[$locId]['whatsappCount']  += intval($row['cnt']);
         } else {
-            $results[$locId]['callAmount']     += $cost;
-            $results[$locId]['callCount']++;
+            $results[$locId]['callAmount']  += $cost;
+            $results[$locId]['callCount']   += intval($row['cnt']);
+        }
+    }
+    return $results;
+}
+
+// Load individual transactions for one location — called via AJAX when a location is selected
+function getLocationMonthlyData(string $locId): array {
+    $monthlyData = [];
+    $stmt = getDb()->prepare(
+        'SELECT type, description, tx_date, amount FROM transactions WHERE location_id = ?'
+    );
+    $stmt->execute([$locId]);
+    while ($row = $stmt->fetch()) {
+        $type = trim($row['type']);
+        $desc = strtolower(trim($row['description'] ?? ''));
+
+        if (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
+            $cat = 'whatsapp'; $cost = 0.50;
+        } elseif (stripos($type, 'Emails') !== false || stripos($desc, 'emails') !== false) {
+            $cat = 'email'; $cost = 0.005;
+        } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
+            $cat = 'call'; $cost = floatval($row['amount'] ?? 0);
+        } else {
+            continue;
         }
 
         if (!empty($row['tx_date'])) {
@@ -89,13 +118,13 @@ function getTransactionData() {
             $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($ds));
             if ($date) {
                 $mk = $date->format('Y-m');
-                if (!isset($results[$locId]['monthlyData'][$mk]))
-                    $results[$locId]['monthlyData'][$mk] = ['types' => []];
-                if (!isset($results[$locId]['monthlyData'][$mk]['types'][$cat]))
-                    $results[$locId]['monthlyData'][$mk]['types'][$cat] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
-                $results[$locId]['monthlyData'][$mk]['types'][$cat]['totalAmount'] += $cost;
-                $results[$locId]['monthlyData'][$mk]['types'][$cat]['count']++;
-                $results[$locId]['monthlyData'][$mk]['types'][$cat]['transactions'][] = [
+                if (!isset($monthlyData[$mk]))
+                    $monthlyData[$mk] = ['types' => []];
+                if (!isset($monthlyData[$mk]['types'][$cat]))
+                    $monthlyData[$mk]['types'][$cat] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
+                $monthlyData[$mk]['types'][$cat]['totalAmount'] += $cost;
+                $monthlyData[$mk]['types'][$cat]['count']++;
+                $monthlyData[$mk]['types'][$cat]['transactions'][] = [
                     'date'         => $row['tx_date'],
                     'amount'       => $cost,
                     'originalType' => $type,
@@ -103,8 +132,7 @@ function getTransactionData() {
             }
         }
     }
-    return $results;
-
+    return $monthlyData;
 }
 
 function getGhlLocations(): array {
@@ -278,6 +306,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
         if (isset($db) && $db->inTransaction()) $db->rollBack();
         echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
     }
+    exit;
+}
+
+// AJAX: return monthly transaction detail for one location
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'location_data') {
+    header('Content-Type: application/json');
+    $locId = trim($_GET['location_id'] ?? '');
+    echo $locId ? json_encode(getLocationMonthlyData($locId)) : '{}';
     exit;
 }
 
@@ -1265,8 +1301,26 @@ document.getElementById('subSel').addEventListener('change', function () {
     if (!isAll) {
         currentLocId = key;
         resetDateRange();
-        setDateBounds(key);
         document.getElementById('monthPanel').classList.add('open');
+
+        // Lazy-load monthly data via AJAX the first time a location is selected
+        const existing = (subaccountData[key] || {}).monthlyData || {};
+        if (!Object.keys(existing).length) {
+            document.getElementById('rangeHint').textContent = 'Loading transactions…';
+            fetch('?action=location_data&location_id=' + encodeURIComponent(key))
+                .then(r => r.json())
+                .then(monthlyData => {
+                    if (!subaccountData[key]) subaccountData[key] = {...zeroData};
+                    subaccountData[key].monthlyData = monthlyData;
+                    setDateBounds(key);
+                    document.getElementById('rangeHint').textContent = '';
+                })
+                .catch(() => {
+                    document.getElementById('rangeHint').textContent = 'Failed to load transactions.';
+                });
+        } else {
+            setDateBounds(key);
+        }
     }
 });
 
