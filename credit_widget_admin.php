@@ -5,8 +5,6 @@
  * Fix: remaining shows negative (red) when exceeded.
  * currently using in sj360
  */
-ini_set('memory_limit', '512M');
-
 function getDb(): PDO {
     static $db = null;
     if ($db instanceof PDO) return $db;
@@ -30,26 +28,22 @@ function getDb(): PDO {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function getCsvFiles($directory) {
-    return [];
-}
-
-function getCreditLimits($filePath) {
+function getCreditLimits() {
     $limits = [];
-    $stmt = getDb()->query('SELECT location_id, wa_credits, email_credits FROM credit_limits');
+    $stmt = getDb()->query('SELECT location_id, wa_credits, email_credits, call_credits FROM credit_limits');
     while ($row = $stmt->fetch()) {
         $locId = trim($row['location_id'] ?? '');
         if ($locId === '') continue;
         $limits[$locId] = [
-            'whatsappCredit' => floatval($row['wa_credits'] ?? 0),
+            'whatsappCredit' => floatval($row['wa_credits']    ?? 0),
             'emailCredit'    => floatval($row['email_credits'] ?? 0),
-            'callCredit'     => 0,
+            'callCredit'     => floatval($row['call_credits']  ?? 0),
         ];
     }
     return $limits;
 }
 
-function processCsvFiles($csvFiles) {
+function getTransactionData() {
     $results = [];
     $stmt = getDb()->query('SELECT location_id, location_name, type, description, tx_date, amount FROM transactions');
     while ($row = $stmt->fetch()) {
@@ -113,86 +107,184 @@ function processCsvFiles($csvFiles) {
 
 }
 
+function getGhlLocations(): array {
+    $cacheFile = sys_get_temp_dir() . '/ghl_locations.json';
+    $cacheTtl  = 300;
+
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtl) {
+        $cached = json_decode(file_get_contents($cacheFile), true);
+        if (is_array($cached) && count($cached) > 0) return $cached;
+    }
+
+    $token = getenv('GHL_TOKEN') ?: 'pit-54903d5b-6a1d-4e3f-be88-d9debe7ede5d';
+    $ch = curl_init('https://services.leadconnectorhq.com/locations/search?limit=100');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 8,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $token,
+            'Version: 2023-02-21',
+        ],
+    ]);
+    $body = curl_exec($ch);
+    curl_close($ch);
+
+    $data      = json_decode($body ?: '', true);
+    $locations = [];
+    foreach ($data['locations'] ?? [] as $loc) {
+        if (!empty($loc['id']) && !empty($loc['name'])) {
+            $locations[] = ['id' => $loc['id'], 'name' => $loc['name']];
+        }
+    }
+    usort($locations, fn($a, $b) => strcmp($a['name'], $b['name']));
+
+    if (count($locations) > 0) {
+        file_put_contents($cacheFile, json_encode($locations));
+    }
+    return $locations;
+}
+
 function displayError($msg) {
     die("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><link href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=DM+Serif+Display&display=swap' rel='stylesheet'></head><body style='background:#f5f4f1;font-family:DM Sans,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;'><div style='background:#fff;border:1px solid #e8e5e0;border-radius:20px;padding:48px 40px;text-align:center;max-width:420px;box-shadow:0 4px 16px rgba(0,0,0,0.07);'><div style='font-size:40px;margin-bottom:12px;'>âš ï¸</div><h2 style='font-family:DM Serif Display,serif;color:#1a1916;margin:0 0 8px;font-size:22px;'>$msg</h2></div></body></html>");
 }
 
-/*
-        while (($row = fgetcsv($file)) !== false) {
-            if (empty($row[$idxId]) || !isset($row[$idxAmt]) || empty($row[$idxType])) continue;
-            $locId = trim($row[$idxId]);
-            $type  = trim($row[$idxType]);
-            $desc  = $idxDesc !== false ? strtolower(trim($row[$idxDesc] ?? '')) : '';
 
-            if (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
-                $cat = 'whatsapp'; $cost = 0.50;
-            } elseif (stripos($type, 'Emails') !== false || stripos($desc, 'emails') !== false) {
-                $cat = 'email'; $cost = 0.005;
-            } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
-                $cat = 'call'; $cost = floatval($row[$idxAmt]);
-            } else {
-                continue;
-            }
-
-            $locName = $idxName !== false && !empty($row[$idxName]) ? trim($row[$idxName]) : $locId;
-
-            if (!isset($results[$locId])) {
-                $results[$locId] = [
-                    'locationName'   => $locName,
-                    'emailAmount'    => 0, 'whatsappAmount' => 0, 'callAmount'    => 0,
-                    'emailCount'     => 0, 'whatsappCount'  => 0, 'callCount'     => 0,
-                    'monthlyData'    => [],
-                ];
-            }
-
-            if ($cat === 'email') {
-                $results[$locId]['emailAmount']    += $cost;
-                $results[$locId]['emailCount']++;
-            } elseif ($cat === 'whatsapp') {
-                $results[$locId]['whatsappAmount'] += $cost;
-                $results[$locId]['whatsappCount']++;
-            } else {
-                $results[$locId]['callAmount']     += $cost;
-                $results[$locId]['callCount']++;
-            }
-
-            // Monthly aggregation — includes full transaction list for modal detail view
-            if ($idxDate !== false && !empty($row[$idxDate])) {
-                $ds   = preg_replace('/(st|nd|rd|th)/', '', $row[$idxDate]);
-                $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($ds));
-                if ($date) {
-                    $mk = $date->format('Y-m');
-                    if (!isset($results[$locId]['monthlyData'][$mk]))
-                        $results[$locId]['monthlyData'][$mk] = ['types' => []];
-                    if (!isset($results[$locId]['monthlyData'][$mk]['types'][$cat]))
-                        $results[$locId]['monthlyData'][$mk]['types'][$cat] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
-                    $results[$locId]['monthlyData'][$mk]['types'][$cat]['totalAmount'] += $cost;
-                    $results[$locId]['monthlyData'][$mk]['types'][$cat]['count']++;
-                    $results[$locId]['monthlyData'][$mk]['types'][$cat]['transactions'][] = [
-                        'date'         => $row[$idxDate],
-                        'amount'       => $cost,
-                        'originalType' => $type,
-                    ];
-                }
-            }
+// Handle topup POST before any HTML output
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_topup') {
+    header('Content-Type: application/json');
+    try {
+        $locId   = trim($_POST['location_id'] ?? '');
+        $date    = trim($_POST['topup_date'] ?? '');
+        $waC     = max(0, intval($_POST['wa_credits']    ?? 0));
+        $emC     = max(0, intval($_POST['email_credits'] ?? 0));
+        $callC   = max(0, intval($_POST['call_credits']  ?? 0));
+        $addedBy = trim($_POST['added_by'] ?? '');
+        $notes   = trim($_POST['notes'] ?? '');
+        if (!$locId || !$date || !$addedBy) {
+            echo json_encode(['ok' => false, 'error' => 'Location, date, and added by are required.']);
+            exit;
         }
-        fclose($file);
+        $db = getDb();
+
+        // Log topup record
+        $db->prepare("INSERT INTO credit_topups (location_id, topup_date, wa_credits, email_credits, call_credits, added_by, notes) VALUES (?, ?, ?, ?, ?, ?, ?)")
+           ->execute([$locId, $date, $waC, $emC, $callC, $addedBy, $notes]);
+
+        // Upsert credit_limits: add on top if exists, insert if new client
+        $check = $db->prepare("SELECT location_id FROM credit_limits WHERE location_id = ?");
+        $check->execute([$locId]);
+        if ($check->fetch()) {
+            $db->prepare("UPDATE credit_limits SET wa_credits = wa_credits + ?, email_credits = email_credits + ?, call_credits = call_credits + ? WHERE location_id = ?")
+               ->execute([$waC, $emC, $callC, $locId]);
+        } else {
+            $db->prepare("INSERT INTO credit_limits (location_id, wa_credits, email_credits, call_credits) VALUES (?, ?, ?, ?)")
+               ->execute([$locId, $waC, $emC, $callC]);
+        }
+
+        echo json_encode(['ok' => true]);
+    } catch (Exception $e) {
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
     }
-    return $results;
+    exit;
 }
 
-function displayErrorDisabled($msg) {
-    die("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><link href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=DM+Serif+Display&display=swap' rel='stylesheet'></head><body style='background:#f5f4f1;font-family:DM Sans,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;'><div style='background:#fff;border:1px solid #e8e5e0;border-radius:20px;padding:48px 40px;text-align:center;max-width:420px;box-shadow:0 4px 16px rgba(0,0,0,0.07);'><div style='font-size:40px;margin-bottom:12px;'>⚠️</div><h2 style='font-family:DM Serif Display,serif;color:#1a1916;margin:0 0 8px;font-size:22px;'>$msg</h2></div></body></html>");
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'import_csv') {
+    header('Content-Type: application/json');
+    try {
+        if (empty($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(['ok' => false, 'error' => 'No file uploaded or upload error.']);
+            exit;
+        }
+
+        $tmpPath = $_FILES['csv_file']['tmp_name'];
+        $fh      = fopen($tmpPath, 'r');
+
+        // Read and normalise header row
+        $rawHeaders = fgetcsv($fh);
+        if (!$rawHeaders) {
+            echo json_encode(['ok' => false, 'error' => 'CSV file is empty.']);
+            fclose($fh); exit;
+        }
+        $headers = array_map(fn($h) => strtolower(trim(preg_replace('/\s+/', '', $h))), $rawHeaders);
+
+        $col = fn($names) => (function() use ($headers, $names) {
+            foreach ((array)$names as $n) {
+                $i = array_search($n, $headers);
+                if ($i !== false) return $i;
+            }
+            return false;
+        })();
+
+        $g  = fn($idx, $row) => $idx !== false ? trim($row[$idx] ?? '') : null;
+        $gf = fn($idx, $row) => $idx !== false && ($row[$idx] ?? '') !== '' ? floatval($row[$idx]) : null;
+
+        $idxRowId    = $col(['transactionid', 'transaction id', 'id']);
+        $idxId       = $col(['locationid', 'location id', 'location_id']);
+        $idxName     = $col(['locationname', 'location name', 'location_name']);
+        $idxType     = $col(['transactiontype', 'transaction type', 'type']);
+        $idxDesc     = $col(['description']);
+        $idxMsgDate  = $col(['activitydate', 'activity date', 'messagedate', 'message date']);
+        $idxTxDate   = $col(['date', 'tx_date']);
+        $idxAmount   = $col(['amount']);
+        $idxBalance  = $col(['walletbalanceaftertransaction', 'balance']);
+        $idxTotBal   = $col(['totalwalletbalance(includingwalletcredits)', 'totalbalance', 'total balance', 'total wallet balance']);
+        $idxCredUsed = $col(['creditsused', 'credits used']);
+        $idxOrigAmt  = $col(['originalamount', 'original amount']);
+        $idxDisc     = $col(['discountapplied', 'discount applied', 'discountamount']);
+
+        if ($idxId === false || $idxType === false) {
+            echo json_encode(['ok' => false, 'error' => 'CSV must have locationId and type columns.']);
+            fclose($fh); exit;
+        }
+
+        $sourceFile = $_FILES['csv_file']['name'];
+        $db = getDb();
+        $db->beginTransaction();
+        $stmt = $db->prepare(
+            'INSERT INTO transactions
+             (row_id, location_id, location_name, type, description,
+              message_date, tx_date, amount, balance, total_balance,
+              credits_used, original_amount, discount_amount, source_file)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $count = 0;
+        while (($row = fgetcsv($fh)) !== false) {
+            $locId = $g($idxId, $row);
+            if ($locId === '' || $locId === null) continue;
+            $stmt->execute([
+                $g($idxRowId,    $row),
+                $locId,
+                $g($idxName,     $row),
+                $g($idxType,     $row),
+                $g($idxDesc,     $row),
+                $g($idxMsgDate,  $row),
+                $g($idxTxDate,   $row),
+                $gf($idxAmount,  $row),
+                $gf($idxBalance, $row),
+                $gf($idxTotBal,  $row),
+                $gf($idxCredUsed,$row),
+                $gf($idxOrigAmt, $row),
+                $gf($idxDisc,    $row),
+                $sourceFile,
+            ]);
+            $count++;
+        }
+        $db->commit();
+        fclose($fh);
+        @unlink($tmpPath);
+
+        echo json_encode(['ok' => true, 'count' => $count]);
+    } catch (Exception $e) {
+        if (isset($db) && $db->inTransaction()) $db->rollBack();
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+    }
+    exit;
 }
 
-// ─── Main Processing ─────────────────────────────────────────────────────────
+$creditLimits  = getCreditLimits();
+$processedData = getTransactionData();
 
-*/
-
-$creditLimits  = getCreditLimits(null);
-$processedData = processCsvFiles([]);
-
-if (empty($processedData)) displayError("No valid data found. Please check the csv_files folder.");
+if (empty($processedData)) displayError("No transaction data found in the database.");
 
 // ─── Build Subaccount Data ────────────────────────────────────────────────────
 
@@ -288,6 +380,10 @@ foreach ($processedData as $locId => $data) {
     ];
 }
 usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=> ($a['waUsed'] + $a['emUsed'] + $a['callUsed']));
+
+// Fetch all GHL locations for dropdowns (cached 5 min)
+$ghlLocations = getGhlLocations();
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -536,6 +632,28 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
         .sel-wrap{min-width:0;width:100%;}
         .topbar{flex-direction:column;align-items:flex-start;}
     }
+
+    /* ── TOPUP FORM ── */
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+    .form-field{display:flex;flex-direction:column;gap:6px;}
+    .form-field.full{grid-column:1/-1;}
+    .form-lbl{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);}
+    .form-lbl .req{color:var(--danger);}
+    .form-actions{display:flex;gap:8px;justify-content:flex-end;padding-top:4px;}
+    .form-msg{display:none;font-size:13px;border-radius:var(--r-xs);padding:10px 14px;margin-bottom:14px;}
+    .form-msg.err{background:var(--danger-soft);border:1px solid var(--danger-mid);color:var(--danger);}
+    .form-msg.ok{background:var(--wa-soft);border:1px solid rgba(37,211,102,.2);color:#1a7a45;}
+    .form-msg.show{display:block;}
+    @media(max-width:520px){.form-grid{grid-template-columns:1fr;}}
+    /* ── CSV DROP ZONE ── */
+    .drop-zone{border:2px dashed var(--border2);border-radius:var(--r-sm);padding:36px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--surface);}
+    .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:var(--accent-soft);}
+    .drop-zone input[type=file]{display:none;}
+    .drop-icon{width:36px;height:36px;margin:0 auto 10px;color:var(--text3);}
+    .drop-hint{font-size:13px;color:var(--text2);margin-bottom:4px;}
+    .drop-hint strong{color:var(--accent);}
+    .drop-sub{font-size:12px;color:var(--text3);}
+    .drop-filename{font-size:13px;font-weight:600;color:var(--text);margin-top:10px;display:none;}
     </style>
 </head>
 <body>
@@ -555,12 +673,14 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
         <div class="sel-wrap">
             <select class="sub-sel" id="subSel">
                 <option value="">All Subaccounts</option>
-                <?php foreach ($processedData as $locId => $data): ?>
-                <option value="<?php echo htmlspecialchars($locId); ?>"><?php echo htmlspecialchars($data['locationName']); ?></option>
+                <?php foreach ($ghlLocations as $loc): ?>
+                <option value="<?php echo htmlspecialchars($loc['id']); ?>"><?php echo htmlspecialchars($loc['name']); ?></option>
                 <?php endforeach; ?>
             </select>
             <svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
+        <button class="range-btn clear" id="openImportBtn" style="white-space:nowrap;flex-shrink:0;">&#8679; Import CSV</button>
+        <button class="range-btn" id="openTopupBtn" style="white-space:nowrap;flex-shrink:0;">+ Top Up</button>
     </div>
 
     <!-- USAGE CARDS -->
@@ -796,6 +916,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
         </div>
     </div>
 
+
 </div><!-- /wrap -->
 
 <!-- TRANSACTION MODAL (individual month category) -->
@@ -837,7 +958,97 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
     </div>
 </div>
 
+<!-- TOPUP MODAL -->
+<div id="topupModal" class="modal">
+    <div class="modal-box" style="max-width:520px">
+        <div class="modal-head">
+            <div>
+                <div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">Credits</div>
+                <div class="modal-ttl">Add Top Up</div>
+                <div class="modal-meta">Record a credit top-up for a subaccount</div>
+            </div>
+            <button class="modal-close" id="topupModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-msg err" id="topupErr"></div>
+            <div class="form-msg ok" id="topupOk">Top-up recorded successfully.</div>
+            <form id="topupForm" autocomplete="off">
+                <div class="form-grid">
+                    <div class="form-field full">
+                        <label class="form-lbl" for="tu_loc">Location <span class="req">*</span></label>
+                        <select class="range-input" id="tu_loc" name="location_id" required style="cursor:pointer;">
+                            <option value="">Select a subaccount…</option>
+                            <?php foreach ($ghlLocations as $loc): ?>
+                            <option value="<?php echo htmlspecialchars($loc['id']); ?>"><?php echo htmlspecialchars($loc['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-lbl" for="tu_date">Date <span class="req">*</span></label>
+                        <input class="range-input" type="date" id="tu_date" name="topup_date" required>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-lbl" for="tu_by">Added By <span class="req">*</span></label>
+                        <input class="range-input" type="text" id="tu_by" name="added_by" placeholder="e.g. KY" maxlength="100" required>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-lbl" for="tu_wa">WhatsApp Credits</label>
+                        <input class="range-input" type="number" id="tu_wa" name="wa_credits" value="0" min="0" step="1">
+                    </div>
+                    <div class="form-field">
+                        <label class="form-lbl" for="tu_em">Email Credits</label>
+                        <input class="range-input" type="number" id="tu_em" name="email_credits" value="0" min="0" step="1">
+                    </div>
+                    <div class="form-field">
+                        <label class="form-lbl" for="tu_call">Call Credits</label>
+                        <input class="range-input" type="number" id="tu_call" name="call_credits" value="0" min="0" step="1">
+                    </div>
+                    <div class="form-field full">
+                        <label class="form-lbl" for="tu_notes">Notes</label>
+                        <input class="range-input" type="text" id="tu_notes" name="notes" placeholder="Optional note…" maxlength="255">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="range-btn clear" id="topupCancelBtn">Cancel</button>
+                    <button type="submit" class="range-btn" id="topupSubmitBtn">Save Top Up</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
+<!-- IMPORT CSV MODAL -->
+<div id="importModal" class="modal">
+    <div class="modal-box" style="max-width:480px">
+        <div class="modal-head">
+            <div>
+                <div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">Transactions</div>
+                <div class="modal-ttl">Import from CSV</div>
+                <div class="modal-meta">Upload a GHL billing export to write to the database</div>
+            </div>
+            <button class="modal-close" id="importModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-msg err" id="importErr"></div>
+            <div class="form-msg ok" id="importOk"></div>
+            <form id="importForm" enctype="multipart/form-data">
+                <div class="drop-zone" id="dropZone">
+                    <input type="file" id="importFile" name="csv_file" accept=".csv">
+                    <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                    </svg>
+                    <div class="drop-hint"><strong>Click to browse</strong> or drag &amp; drop</div>
+                    <div class="drop-sub">CSV files only &middot; locationId and type columns required</div>
+                    <div class="drop-filename" id="dropFilename"></div>
+                </div>
+                <div class="form-actions" style="margin-top:20px;">
+                    <button type="button" class="range-btn clear" id="importCancelBtn">Cancel</button>
+                    <button type="submit" class="range-btn" id="importSubmitBtn" disabled style="opacity:.5;">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <script>
 const subaccountData = <?php echo $subaccountDataJson; ?>;
@@ -1027,11 +1238,21 @@ document.getElementById('clearRange').addEventListener('click', resetDateRange);
     document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') filterAndRender(); });
 });
 
+const zeroData = {
+    whatsappPercent:0, emailPercent:0, callPercent:0,
+    whatsappCredit:0, emailCredit:0, callCredit:0,
+    whatsappUsedCredit:0, emailUsedCredit:0, callUsedCredit:0,
+    whatsappRemainingCredit:0, emailRemainingCredit:0, callRemainingCredit:0,
+    whatsappAmount:0, emailAmount:0, callAmount:0,
+    whatsappUsedAmount:0, emailUsedAmount:0, callUsedAmount:0,
+    whatsappRemainingAmount:0, emailRemainingAmount:0, callRemainingAmount:0,
+    monthlyData:{}
+};
+
 // ── Subaccount selector ──
 document.getElementById('subSel').addEventListener('change', function () {
     const key = this.value;
-    const d   = subaccountData[key];
-    if (!d) return;
+    const d   = subaccountData[key] || (key === '' ? subaccountData[''] : zeroData);
 
     applyCard('wa', d);
     applyCard('em', d);
@@ -1098,7 +1319,153 @@ function closeTxModal() {
 }
 document.getElementById('txModalClose').addEventListener('click', closeTxModal);
 document.getElementById('txModal').addEventListener('click', e => { if (e.target === document.getElementById('txModal')) closeTxModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTxModal(); });
+
+// ── Topup modal ──
+const topupModal = document.getElementById('topupModal');
+
+function openTopupModal() {
+    document.getElementById('topupErr').classList.remove('show');
+    document.getElementById('topupOk').classList.remove('show');
+    document.getElementById('topupForm').reset();
+    document.getElementById('tu_date').value = new Date().toISOString().slice(0, 10);
+    topupModal.classList.add('on');
+    document.body.style.overflow = 'hidden';
+}
+function closeTopupModal() {
+    topupModal.classList.remove('on');
+    document.body.style.overflow = '';
+}
+
+document.getElementById('openTopupBtn').addEventListener('click', openTopupModal);
+document.getElementById('topupModalClose').addEventListener('click', closeTopupModal);
+document.getElementById('topupCancelBtn').addEventListener('click', closeTopupModal);
+topupModal.addEventListener('click', e => { if (e.target === topupModal) closeTopupModal(); });
+
+document.getElementById('topupForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn   = document.getElementById('topupSubmitBtn');
+    const errEl = document.getElementById('topupErr');
+    const okEl  = document.getElementById('topupOk');
+    errEl.classList.remove('show');
+    okEl.classList.remove('show');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+        const fd = new FormData(this);
+        fd.append('action', 'add_topup');
+        const res  = await fetch(location.href, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.ok) {
+            okEl.classList.add('show');
+            setTimeout(() => { closeTopupModal(); location.reload(); }, 1000);
+        } else {
+            errEl.textContent = data.error || 'Something went wrong.';
+            errEl.classList.add('show');
+            btn.disabled = false;
+            btn.textContent = 'Save Top Up';
+        }
+    } catch (err) {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Save Top Up';
+    }
+});
+
+// ── Import CSV modal ──
+const importModal = document.getElementById('importModal');
+
+function openImportModal() {
+    document.getElementById('importErr').classList.remove('show');
+    document.getElementById('importOk').classList.remove('show');
+    document.getElementById('importForm').reset();
+    document.getElementById('dropFilename').style.display = 'none';
+    document.getElementById('dropFilename').textContent   = '';
+    document.getElementById('importSubmitBtn').disabled   = true;
+    document.getElementById('importSubmitBtn').style.opacity = '.5';
+    importModal.classList.add('on');
+    document.body.style.overflow = 'hidden';
+}
+function closeImportModal() {
+    importModal.classList.remove('on');
+    document.body.style.overflow = '';
+}
+
+document.getElementById('openImportBtn').addEventListener('click', openImportModal);
+document.getElementById('importModalClose').addEventListener('click', closeImportModal);
+document.getElementById('importCancelBtn').addEventListener('click', closeImportModal);
+importModal.addEventListener('click', e => { if (e.target === importModal) closeImportModal(); });
+
+// Drop zone behaviour
+const dropZone   = document.getElementById('dropZone');
+const importFile = document.getElementById('importFile');
+const submitBtn  = document.getElementById('importSubmitBtn');
+
+function setFile(file) {
+    if (!file || !file.name.endsWith('.csv')) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    importFile.files = dt.files;
+    const fn = document.getElementById('dropFilename');
+    fn.textContent   = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+    fn.style.display = 'block';
+    submitBtn.disabled     = false;
+    submitBtn.style.opacity = '1';
+}
+
+dropZone.addEventListener('click', () => importFile.click());
+importFile.addEventListener('change', () => { if (importFile.files[0]) setFile(importFile.files[0]); });
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+});
+
+document.getElementById('importForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn   = submitBtn;
+    const errEl = document.getElementById('importErr');
+    const okEl  = document.getElementById('importOk');
+    errEl.classList.remove('show');
+    okEl.classList.remove('show');
+    if (!importFile.files[0]) {
+        errEl.textContent = 'Please select a CSV file.';
+        errEl.classList.add('show');
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Importing…';
+    try {
+        const fd = new FormData(this);
+        fd.append('action', 'import_csv');
+        const res  = await fetch(location.href, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.ok) {
+            okEl.textContent = data.count + ' row' + (data.count !== 1 ? 's' : '') + ' imported successfully.';
+            okEl.classList.add('show');
+            setTimeout(() => { closeImportModal(); location.reload(); }, 1500);
+        } else {
+            errEl.textContent = data.error || 'Import failed.';
+            errEl.classList.add('show');
+            btn.disabled = false;
+            btn.textContent = 'Import';
+        }
+    } catch (err) {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Import';
+    }
+});
+
+// ── Escape closes any open modal ──
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeTxModal(); closeTopupModal(); closeImportModal(); }
+});
 </script>
 </body>
 </html>

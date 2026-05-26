@@ -3,7 +3,7 @@
  * GHL Credits Dashboard – Redesigned
  * Design: DM Sans + DM Serif Display, warm neutral palette.
  * Fix: remaining credits/amount shows negative (red) when exceeded.
- * New: Top-up history from topups.csv
+ * Top-up history read from credit_topups table.
  */
 
 $targetLocationId = isset($_GET['locationId']) ? trim($_GET['locationId']) : '';
@@ -36,11 +36,7 @@ function getDb(): PDO {
     return $db;
 }
 
-function getCsvFiles($directory) {
-    return [];
-}
-
-function getCreditLimits($filePath, $targetLocationId = null) {
+function getCreditLimits($targetLocationId = null) {
     $creditLimits = [];
     $sql = 'SELECT location_id, wa_credits, email_credits FROM credit_limits';
     $params = [];
@@ -62,7 +58,7 @@ function getCreditLimits($filePath, $targetLocationId = null) {
     return $creditLimits;
 }
 
-function processCsvFiles($csvFiles, $targetLocationId = null) {
+function getTransactionData($targetLocationId = null) {
     $results = [];
     $sql = 'SELECT location_id, location_name, type, description, tx_date
             FROM transactions';
@@ -123,7 +119,7 @@ function processCsvFiles($csvFiles, $targetLocationId = null) {
     return $results;
 }
 
-function getTopupHistory($filePath, $targetLocationId) {
+function getTopupHistory($targetLocationId) {
     $topups = [];
     $stmt = getDb()->prepare('SELECT topup_date, wa_credits, email_credits, added_by, notes
                               FROM credit_topups
@@ -156,9 +152,9 @@ function displayError($msg) {
 }
 
 // ── Execute ──────────────────────────────────────────────────────────────────
-$creditLimits  = getCreditLimits(null, $targetLocationId);
-$processedData = processCsvFiles([], $targetLocationId);
-$topupHistory  = getTopupHistory(null, $targetLocationId);
+$creditLimits  = getCreditLimits($targetLocationId);
+$processedData = getTransactionData($targetLocationId);
+$topupHistory  = getTopupHistory($targetLocationId);
 
 if (empty($processedData)) displayError("No valid data found for this subaccount.");
 
@@ -173,7 +169,6 @@ foreach ($processedData as $locationId => $data) {
     $emailUsedAmountRm    = $data['emailAmount'];
     $whatsappUsedAmountRm = $data['whatsappAmount'];
 
-    // Base credits from total_credits.csv + all top-ups from topups.csv
     $baseWhatsappCredit   = $creditLimits[$locationId]['whatsappCredit'] ?? 0;
     $baseEmailCredit      = $creditLimits[$locationId]['emailCredit']    ?? 0;
     $whatsappCredit       = $baseWhatsappCredit + $topupTotalWaCredits;
