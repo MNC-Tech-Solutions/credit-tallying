@@ -45,7 +45,7 @@ function getCreditLimits() {
 
 function getTransactionData() {
     $results = [];
-    $stmt = getDb()->query('SELECT location_id, location_name, type, description, tx_date, amount FROM transactions');
+    $stmt = getDb()->query('SELECT location_id, location_name, type, description, tx_date, amount FROM transactions ORDER BY id DESC LIMIT 100000');
     while ($row = $stmt->fetch()) {
         if (empty($row['location_id']) || empty($row['type'])) continue;
         $locId = trim($row['location_id']);
