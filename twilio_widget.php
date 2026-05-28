@@ -128,6 +128,7 @@ try {
 
     while ($row = $stmt->fetch()) {
         $project  = trim($row['project'] ?? '');
+        if ($project === '' || stripos($project, 'All Accounts') !== false) continue;
         $company  = trim($row['company_name'] ?? '');
         $group    = trim($row['item_group']   ?? '') ?: 'Other';
         $item     = trim($row['item']         ?? '');

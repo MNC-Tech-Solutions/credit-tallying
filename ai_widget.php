@@ -22,7 +22,7 @@ function getDb(): PDO {
 }
 
 function processAll(bool $isDemo, string $targetLocationId): array {
-    $sql = "SELECT location_id, MAX(location_name) AS location_name,
+    $sql = "SELECT location_id, location_name,
                    ABS(IFNULL(amount, 0)) AS amount, tx_date, description
             FROM transactions
             WHERE type = 'Conversation and Voice AI'";
