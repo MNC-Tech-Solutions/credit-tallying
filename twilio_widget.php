@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csvfile'])) {
         $chk = getDb()->prepare('SELECT COUNT(*) FROM twilio_usage WHERE source_file = ?');
         $chk->execute([$originalName]);
         if ($chk->fetchColumn() > 0) {
-            $importResult = ['ok' => false, 'msg' => "File "$originalName" was already imported — skipped."];
+            $importResult = ['ok' => false, 'msg' => 'File "' . $originalName . '" was already imported — skipped.'];
         } else {
             $raw     = file_get_contents($tmpPath);
             $content = ltrim($raw, "\xEF\xBB\xBF"); // strip UTF-8 BOM
