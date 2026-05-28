@@ -167,10 +167,8 @@ foreach ($processedData as $locationId => $data) {
     $emailUsedAmountRm    = $data['emailAmount'];
     $whatsappUsedAmountRm = $data['whatsappAmount'];
 
-    $baseWhatsappCredit   = $creditLimits[$locationId]['whatsappCredit'] ?? 0;
-    $baseEmailCredit      = $creditLimits[$locationId]['emailCredit']    ?? 0;
-    $whatsappCredit       = $baseWhatsappCredit + $topupTotalWaCredits;
-    $emailCredit          = $baseEmailCredit    + $topupTotalEmCredits;
+    $whatsappCredit       = $creditLimits[$locationId]['whatsappCredit'] ?? 0;
+    $emailCredit          = $creditLimits[$locationId]['emailCredit']    ?? 0;
 
     $whatsappAmountRm     = $whatsappCredit / 2;
     $emailAmountRm        = $emailCredit * 0.005;
@@ -205,8 +203,8 @@ foreach ($processedData as $locationId => $data) {
 
 // If no transactions yet, build a zero-usage record from credit limits + topups
 if (!isset($subaccountData[$targetLocationId])) {
-    $waC            = ($creditLimits[$targetLocationId]['whatsappCredit'] ?? 0) + $topupTotalWaCredits;
-    $emC            = ($creditLimits[$targetLocationId]['emailCredit']    ?? 0) + $topupTotalEmCredits;
+    $waC            = $creditLimits[$targetLocationId]['whatsappCredit'] ?? 0;
+    $emC            = $creditLimits[$targetLocationId]['emailCredit']    ?? 0;
     $waAmRm         = $waC / 2;
     $emAmRm         = $emC * 0.005;
     $subaccountData[$targetLocationId] = [
