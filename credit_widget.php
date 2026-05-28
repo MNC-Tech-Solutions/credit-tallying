@@ -156,8 +156,6 @@ $creditLimits  = getCreditLimits($targetLocationId);
 $processedData = getTransactionData($targetLocationId);
 $topupHistory  = getTopupHistory($targetLocationId);
 
-if (empty($processedData)) displayError("No valid data found for this subaccount.");
-
 // Topup totals (sum all top-ups for this location)
 $topupTotalWaCredits = array_sum(array_column($topupHistory, 'whatsappCredits'));
 $topupTotalEmCredits = array_sum(array_column($topupHistory, 'emailCredits'));
@@ -205,8 +203,33 @@ foreach ($processedData as $locationId => $data) {
     ];
 }
 
-$initialData = $subaccountData[$targetLocationId] ?? null;
-if (!$initialData) displayError("No valid data found for this subaccount.");
+// If no transactions yet, build a zero-usage record from credit limits + topups
+if (!isset($subaccountData[$targetLocationId])) {
+    $waC            = ($creditLimits[$targetLocationId]['whatsappCredit'] ?? 0) + $topupTotalWaCredits;
+    $emC            = ($creditLimits[$targetLocationId]['emailCredit']    ?? 0) + $topupTotalEmCredits;
+    $waAmRm         = $waC / 2;
+    $emAmRm         = $emC * 0.005;
+    $subaccountData[$targetLocationId] = [
+        'name'                    => $targetLocationId,
+        'emailCredit'             => $emC,
+        'whatsappCredit'          => $waC,
+        'emailUsedCredit'         => 0,
+        'whatsappUsedCredit'      => 0,
+        'emailRemainingCredit'    => $emC,
+        'whatsappRemainingCredit' => $waC,
+        'emailAmount'             => $emAmRm,
+        'whatsappAmount'          => $waAmRm,
+        'emailUsedAmount'         => 0,
+        'whatsappUsedAmount'      => 0,
+        'emailRemainingAmount'    => $emAmRm,
+        'whatsappRemainingAmount' => $waAmRm,
+        'emailPercent'            => 0,
+        'whatsappPercent'         => 0,
+        'monthlyData'             => [],
+    ];
+}
+
+$initialData = $subaccountData[$targetLocationId];
 
 ksort($initialData['monthlyData']);
 $initialData['monthlyData'] = array_reverse($initialData['monthlyData'], true);

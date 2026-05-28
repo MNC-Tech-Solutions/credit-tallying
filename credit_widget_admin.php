@@ -319,8 +319,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'locatio
 
 $creditLimits  = getCreditLimits();
 $processedData = getTransactionData();
-
-if (empty($processedData)) displayError("No transaction data found in the database.");
+$ghlLocations  = getGhlLocations();
+$ghlNameMap    = array_column($ghlLocations, 'name', 'id');
 
 // ─── Build Subaccount Data ────────────────────────────────────────────────────
 
@@ -359,22 +359,24 @@ function buildRecord($waCredit, $emCredit, $callCredit, $waUsedRm, $emUsedRm, $c
 
 $subaccountData = [];
 
-// All-Subaccounts aggregate
+// All-Subaccounts aggregate — sum ALL credit_limits entries (not just those with transactions)
 $totWaCredit = $totEmCredit = $totCallCredit = $totWaUsed = $totEmUsed = $totCallUsed = 0;
+foreach ($creditLimits as $locId => $limits) {
+    $totWaCredit   += $limits['whatsappCredit'];
+    $totEmCredit   += $limits['emailCredit'];
+    $totCallCredit += $limits['callCredit'];
+}
 foreach ($processedData as $locId => $data) {
-    $totWaCredit   += $creditLimits[$locId]['whatsappCredit'] ?? 0;
-    $totEmCredit   += $creditLimits[$locId]['emailCredit']    ?? 0;
-    $totCallCredit += $creditLimits[$locId]['callCredit']     ?? 0;
-    $totWaUsed     += $data['whatsappAmount'];
-    $totEmUsed     += $data['emailAmount'];
-    $totCallUsed   += $data['callAmount'];
+    $totWaUsed   += $data['whatsappAmount'];
+    $totEmUsed   += $data['emailAmount'];
+    $totCallUsed += $data['callAmount'];
 }
 $subaccountData[''] = array_merge(buildRecord($totWaCredit, $totEmCredit, $totCallCredit, $totWaUsed, $totEmUsed, $totCallUsed), [
     'name'        => 'All Subaccounts',
     'monthlyData' => [],
 ]);
 
-// Individual subaccounts
+// Individual subaccounts — locations with transactions
 foreach ($processedData as $locId => $data) {
     $waC   = $creditLimits[$locId]['whatsappCredit'] ?? 0;
     $emC   = $creditLimits[$locId]['emailCredit']    ?? 0;
@@ -387,6 +389,21 @@ foreach ($processedData as $locId => $data) {
             'waCount'     => $data['whatsappCount'],
             'emCount'     => $data['emailCount'],
             'callCount'   => $data['callCount'],
+        ]
+    );
+}
+
+// Locations with credit limits but no transactions yet — show budget with 0 usage
+foreach ($creditLimits as $locId => $limits) {
+    if (isset($subaccountData[$locId])) continue;
+    $subaccountData[$locId] = array_merge(
+        buildRecord($limits['whatsappCredit'], $limits['emailCredit'], $limits['callCredit'], 0, 0, 0),
+        [
+            'name'        => $ghlNameMap[$locId] ?? $locId,
+            'monthlyData' => [],
+            'waCount'     => 0,
+            'emCount'     => 0,
+            'callCount'   => 0,
         ]
     );
 }
@@ -416,9 +433,6 @@ foreach ($processedData as $locId => $data) {
     ];
 }
 usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=> ($a['waUsed'] + $a['emUsed'] + $a['callUsed']));
-
-// Fetch all GHL locations for dropdowns (cached 5 min)
-$ghlLocations = getGhlLocations();
 
 ?>
 <!DOCTYPE html>
