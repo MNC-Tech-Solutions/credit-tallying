@@ -7,64 +7,73 @@ if ($targetLocationId !== '' && !preg_match('/^[A-Za-z0-9_-]+$/', $targetLocatio
     exit;
 }
 
-function getCsvFiles($directory) {
-    if (!is_dir($directory)) return [];
-    return glob($directory . '/*.csv') ?: [];
+function getDb(): PDO {
+    static $db = null;
+    if ($db instanceof PDO) return $db;
+    $host = getenv('DB_HOST') ?: 'ghl-credits-db.cr0yeukuujnk.ap-southeast-1.rds.amazonaws.com';
+    $name = getenv('DB_NAME') ?: 'ghlcredits';
+    $user = getenv('DB_USER') ?: 'admin';
+    $pass = getenv('DB_PASS') ?: 'ghlcredits123';
+    $db = new PDO("mysql:host={$host};dbname={$name};charset=utf8mb4", $user, $pass, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    return $db;
 }
 
-function processAll($csvFiles, $isDemo, $targetLocationId) {
+function processAll(bool $isDemo, string $targetLocationId): array {
+    $sql = "SELECT location_id, MAX(location_name) AS location_name,
+                   ABS(IFNULL(amount, 0)) AS amount, tx_date, description
+            FROM transactions
+            WHERE type = 'Conversation and Voice AI'";
+    $params = [];
+    if (!$isDemo && $targetLocationId !== '') {
+        $sql .= ' AND location_id = ?';
+        $params[] = $targetLocationId;
+    }
+    $stmt = getDb()->prepare($sql);
+    $stmt->execute($params);
+
     $results = [];
-    foreach ($csvFiles as $filePath) {
-        if (!file_exists($filePath)) continue;
-        $file = fopen($filePath, 'r');
-        if ($file === false) continue;
-        $header = fgetcsv($file);
-        if ($header === false) { fclose($file); continue; }
-        $map = array_flip(array_map(fn($c) => strtolower(trim($c)), $header));
-        $idxId     = $map['location id']      ?? $map['locationid']      ?? $map['location_id'] ?? false;
-        $idxType   = $map['transaction type'] ?? $map['transactiontype'] ?? $map['type']        ?? false;
-        $idxAmount = $map['original amount']  ?? $map['amount']                                  ?? false;
-        $idxDate   = $map['activity date']    ?? $map['date']                                    ?? false;
-        $idxName   = $map['location name']    ?? $map['locationname']                            ?? false;
-        $idxDesc   = $map['description']                                                         ?? false;
-        if ($idxId === false || $idxAmount === false || $idxType === false) { fclose($file); continue; }
-        while (($row = fgetcsv($file)) !== false) {
-            if (trim($row[$idxType] ?? '') !== 'Conversation and Voice AI') continue;
-            $locId = trim($row[$idxId] ?? '');
-            if (!$isDemo && $targetLocationId !== '' && $locId !== $targetLocationId) continue;
-            $amount  = floatval($row[$idxAmount] ?? 0);
-            $locName = ($idxName !== false && !empty($row[$idxName])) ? trim($row[$idxName]) : $locId;
-            $desc    = ($idxDesc !== false) ? trim($row[$idxDesc] ?? '') : '';
-            $monthKey = null;
-            if ($idxDate !== false && !empty($row[$idxDate])) {
-                $clean = str_replace(',', '', preg_replace('/(\d+)(st|nd|rd|th)/i', '$1', $row[$idxDate]));
-                $ts = strtotime($clean);
-                if ($ts) $monthKey = date('Y-m', $ts);
-            }
-            if (!isset($results[$locId])) {
-                $results[$locId] = ['locationName' => $locName, 'conversationaiAmount' => 0, 'conversationaiCount' => 0, 'monthlyData' => []];
-            }
-            $results[$locId]['conversationaiAmount'] += $amount;
-            $results[$locId]['conversationaiCount']++;
-            if ($monthKey) {
-                if (!isset($results[$locId]['monthlyData'][$monthKey]))
-                    $results[$locId]['monthlyData'][$monthKey] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
-                $results[$locId]['monthlyData'][$monthKey]['totalAmount'] += $amount;
-                $results[$locId]['monthlyData'][$monthKey]['count']++;
-                $results[$locId]['monthlyData'][$monthKey]['transactions'][] = ['date' => $row[$idxDate], 'amount' => $amount, 'description' => $desc];
-            }
+    while ($row = $stmt->fetch()) {
+        $locId   = trim($row['location_id']);
+        $locName = trim($row['location_name'] ?? $locId);
+        $amount  = floatval($row['amount']);
+        $dateRaw = trim($row['tx_date'] ?? '');
+        $desc    = trim($row['description'] ?? '');
+
+        $monthKey = null;
+        if ($dateRaw !== '') {
+            $clean = str_replace(',', '', preg_replace('/(\d+)(st|nd|rd|th)/i', '$1', $dateRaw));
+            $ts = strtotime($clean) ?: strtotime($dateRaw);
+            if ($ts) $monthKey = date('Y-m', $ts);
         }
-        fclose($file);
+
+        if (!isset($results[$locId])) {
+            $results[$locId] = ['locationName' => $locName, 'conversationaiAmount' => 0, 'conversationaiCount' => 0, 'monthlyData' => []];
+        }
+        $results[$locId]['conversationaiAmount'] += $amount;
+        $results[$locId]['conversationaiCount']++;
+        if ($monthKey) {
+            if (!isset($results[$locId]['monthlyData'][$monthKey]))
+                $results[$locId]['monthlyData'][$monthKey] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
+            $results[$locId]['monthlyData'][$monthKey]['totalAmount'] += $amount;
+            $results[$locId]['monthlyData'][$monthKey]['count']++;
+            $results[$locId]['monthlyData'][$monthKey]['transactions'][] = ['date' => $dateRaw, 'amount' => $amount, 'description' => $desc];
+        }
     }
     return $results;
 }
 
-$csvDirectory  = __DIR__ . '/csv_files';
-$csvFiles      = getCsvFiles($csvDirectory);
-$processedData = processAll($csvFiles, $isDemo, $targetLocationId);
+try {
+    $processedData = processAll($isDemo, $targetLocationId);
+} catch (Throwable $e) {
+    echo '<html><body><div style="text-align:center;padding:40px;"><h2>Database error: ' . htmlspecialchars($e->getMessage()) . '</h2></div></body></html>';
+    exit;
+}
 
 if (empty($processedData) && $targetLocationId !== '') {
-    echo '<html><body><div style="text-align:center;padding:40px;"><h2>No valid data found for this subaccount.</h2></div></body></html>';
+    echo '<html><body><div style="text-align:center;padding:40px;"><h2>No AI usage data found for this subaccount.</h2></div></body></html>';
     exit;
 }
 
