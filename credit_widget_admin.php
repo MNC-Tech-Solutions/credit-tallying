@@ -2,7 +2,7 @@
 /**
  * GHL Credits Dashboard – Admin / All Subaccounts
  * Design: DM Sans + DM Serif Display, warm neutral palette.
- * Fix: remaining shows negative (red) when exceeded.
+ * Fix: remaining shows negative (red) when exceeded. 
  * currently using in sj360
  */
 function getDb(): PDO {

@@ -545,17 +545,7 @@ $subaccountDataJson = json_encode($subaccountData, JSON_HEX_TAG | JSON_HEX_APOS 
                     <div class="metric">
                         <div class="metric-lbl">Total</div>
                         <div class="metric-val"><?php echo number_format($c['credit']); ?></div>
-                        <div class="metric-sub">
-                            <?php
-                            $topupC = $c['cls'] === 'wa' ? $topupTotalWaCredits : $topupTotalEmCredits;
-                            $baseC  = $c['cls'] === 'wa'
-                                ? ($creditLimits[$targetLocationId]['whatsappCredit'] ?? 0)
-                                : ($creditLimits[$targetLocationId]['emailCredit']    ?? 0);
-                            echo $topupC > 0
-                                ? 'base ' . number_format($baseC) . ' + ' . number_format($topupC) . ' topped up'
-                                : 'credits allocated';
-                            ?>
-                        </div>
+                        <div class="metric-sub">credits allocated</div>
                     </div>
                     <div class="metric">
                         <div class="metric-lbl">Used</div>
