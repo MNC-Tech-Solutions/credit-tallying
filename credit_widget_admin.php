@@ -765,7 +765,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
             ],
             'call' => [
                 'cls'   => 'call',
-                'label' => 'Call',
+                'label' => 'GHL Call',
                 'pct'   => $initialData['callPercent'],
                 'credit'=> $initialData['callCredit'],
                 'usedC' => $initialData['callUsedCredit'],
