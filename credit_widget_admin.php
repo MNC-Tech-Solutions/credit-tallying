@@ -220,7 +220,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
     header('Content-Type: application/json');
     try {
         if (empty($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
-            echo json_encode(['ok' => false, 'error' => 'No file uploaded or upload error.']);
+            $uploadErrors = [
+                UPLOAD_ERR_INI_SIZE  => 'File exceeds the server upload limit (' . ini_get('upload_max_filesize') . '). Ask your admin to increase upload_max_filesize in php.ini.',
+                UPLOAD_ERR_FORM_SIZE => 'File exceeds the form size limit.',
+                UPLOAD_ERR_PARTIAL   => 'File was only partially uploaded. Please try again.',
+                UPLOAD_ERR_NO_FILE   => 'No file was uploaded.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Server is missing a temporary folder.',
+                UPLOAD_ERR_CANT_WRITE => 'Server failed to write the file to disk.',
+            ];
+            $code = $_FILES['csv_file']['error'] ?? -1;
+            $msg  = $uploadErrors[$code] ?? 'Upload error (code ' . $code . '). No file received.';
+            echo json_encode(['ok' => false, 'error' => $msg]);
             exit;
         }
 
