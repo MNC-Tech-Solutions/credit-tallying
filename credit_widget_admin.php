@@ -24,12 +24,14 @@ function getDb(): PDO {
         ]
     );
     $db->exec("CREATE TABLE IF NOT EXISTS csv_audit_log (
-        id             INT AUTO_INCREMENT PRIMARY KEY,
-        source_file    VARCHAR(255)  NOT NULL,
-        latest_tx_date VARCHAR(100)  NOT NULL DEFAULT '',
-        row_count      INT           NOT NULL DEFAULT 0,
-        created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        source_file     VARCHAR(255)  NOT NULL,
+        first_tx_date   VARCHAR(100)  NOT NULL DEFAULT '',
+        latest_tx_date  VARCHAR(100)  NOT NULL DEFAULT '',
+        row_count       INT           NOT NULL DEFAULT 0,
+        created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    try { $db->exec("ALTER TABLE csv_audit_log ADD COLUMN first_tx_date VARCHAR(100) NOT NULL DEFAULT '' AFTER source_file"); } catch (Exception $e) {}
     return $db;
 }
 
@@ -293,8 +295,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $count = 0;
-        $latestDt  = null;
-        $latestRaw = '';
+        $latestDt = null; $latestRaw = '';
+        $firstDt  = null; $firstRaw  = '';
         while (($row = fgetcsv($fh)) !== false) {
             $locId = $g($idxId, $row);
             if ($locId === '' || $locId === null) continue;
@@ -320,16 +322,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                 $clean = preg_replace('/(st|nd|rd|th)/i', '', $txDateRaw);
                 foreach (['M j Y, h:i:s A','M j Y','Y-m-d H:i:s','Y-m-d','m/d/Y','d/m/Y'] as $fmt) {
                     $dt = DateTime::createFromFormat($fmt, trim($clean));
-                    if ($dt && ($latestDt === null || $dt > $latestDt)) {
-                        $latestDt  = $dt;
-                        $latestRaw = $txDateRaw;
+                    if ($dt) {
+                        if ($latestDt === null || $dt > $latestDt) { $latestDt = $dt; $latestRaw = $txDateRaw; }
+                        if ($firstDt  === null || $dt < $firstDt)  { $firstDt  = $dt; $firstRaw  = $txDateRaw; }
                     }
                 }
             }
         }
         $db->commit();
-        $db->prepare('INSERT INTO csv_audit_log (source_file, latest_tx_date, row_count) VALUES (?,?,?)')
-           ->execute([$sourceFile, $latestRaw, $count]);
+        $db->prepare('INSERT INTO csv_audit_log (source_file, first_tx_date, latest_tx_date, row_count) VALUES (?,?,?,?)')
+           ->execute([$sourceFile, $firstRaw, $latestRaw, $count]);
         fclose($fh);
         @unlink($tmpPath);
 
@@ -357,22 +359,26 @@ $ghlNameMap    = array_column($ghlLocations, 'name', 'id');
 // Seed audit log on first load if empty
 if ((int)getDb()->query('SELECT COUNT(*) FROM csv_audit_log')->fetchColumn() === 0) {
     $txDates = getDb()->query('SELECT tx_date FROM transactions WHERE tx_date IS NOT NULL AND tx_date <> ""')->fetchAll(PDO::FETCH_COLUMN);
-    $seedDt = null; $seedRaw = '';
+    $seedLatestDt = null; $seedLatestRaw = '';
+    $seedFirstDt  = null; $seedFirstRaw  = '';
     foreach ($txDates as $raw) {
         $clean = preg_replace('/(st|nd|rd|th)/i', '', $raw);
         foreach (['M j Y, h:i:s A','M j Y','Y-m-d H:i:s','Y-m-d','m/d/Y','d/m/Y'] as $fmt) {
             $dt = DateTime::createFromFormat($fmt, trim($clean));
-            if ($dt && ($seedDt === null || $dt > $seedDt)) { $seedDt = $dt; $seedRaw = $raw; }
+            if ($dt) {
+                if ($seedLatestDt === null || $dt > $seedLatestDt) { $seedLatestDt = $dt; $seedLatestRaw = $raw; }
+                if ($seedFirstDt  === null || $dt < $seedFirstDt)  { $seedFirstDt  = $dt; $seedFirstRaw  = $raw; }
+            }
         }
     }
-    if ($seedDt) {
+    if ($seedLatestDt) {
         $total = (int)getDb()->query('SELECT COUNT(*) FROM transactions')->fetchColumn();
-        getDb()->prepare('INSERT INTO csv_audit_log (source_file, latest_tx_date, row_count) VALUES (?,?,?)')
-               ->execute(['(initial data)', $seedRaw, $total]);
+        getDb()->prepare('INSERT INTO csv_audit_log (source_file, first_tx_date, latest_tx_date, row_count) VALUES (?,?,?,?)')
+               ->execute(['(initial data)', $seedFirstRaw, $seedLatestRaw, $total]);
     }
 }
 $auditLog = getDb()->query(
-    'SELECT source_file, latest_tx_date, row_count, created_at FROM csv_audit_log ORDER BY created_at DESC LIMIT 50'
+    'SELECT source_file, first_tx_date, latest_tx_date, created_at FROM csv_audit_log ORDER BY created_at DESC LIMIT 5'
 )->fetchAll();
 
 // ─── Build Subaccount Data ────────────────────────────────────────────────────
@@ -1004,6 +1010,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
                         <tr>
                             <th>#</th>
                             <th>File</th>
+                            <th>First Transaction Date</th>
                             <th>Latest Transaction Date</th>
                             <th>Uploaded At</th>
                         </tr>
@@ -1013,12 +1020,13 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
                         <tr>
                             <td><?= $i + 1 ?></td>
                             <td><?= htmlspecialchars($entry['source_file']) ?></td>
+                            <td><?= htmlspecialchars($entry['first_tx_date']) ?></td>
                             <td><?= htmlspecialchars($entry['latest_tx_date']) ?></td>
                             <td><?= htmlspecialchars($entry['created_at']) ?></td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($auditLog)): ?>
-                        <tr><td colspan="4" style="text-align:center;color:var(--text2);padding:24px;">No imports recorded yet.</td></tr>
+                        <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No imports recorded yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -1399,8 +1407,9 @@ document.getElementById('subSel').addEventListener('change', function () {
     applyCard('call', d);
 
     const isAll = key === '';
-    document.getElementById('subPanel').style.display   = isAll ? '' : 'none';
-    document.getElementById('monthPanel').style.display = isAll ? 'none' : '';
+    document.getElementById('subPanel').style.display    = isAll ? '' : 'none';
+    document.getElementById('auditPanel').style.display  = isAll ? '' : 'none';
+    document.getElementById('monthPanel').style.display  = isAll ? 'none' : '';
 
     if (!isAll) {
         currentLocId = key;
