@@ -23,6 +23,13 @@ function getDb(): PDO {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]
     );
+    $db->exec("CREATE TABLE IF NOT EXISTS csv_audit_log (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        source_file    VARCHAR(255)  NOT NULL,
+        latest_tx_date VARCHAR(100)  NOT NULL DEFAULT '',
+        row_count      INT           NOT NULL DEFAULT 0,
+        created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     return $db;
 }
 
@@ -286,9 +293,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $count = 0;
+        $latestDt  = null;
+        $latestRaw = '';
         while (($row = fgetcsv($fh)) !== false) {
             $locId = $g($idxId, $row);
             if ($locId === '' || $locId === null) continue;
+            $txDateRaw = $g($idxTxDate, $row) ?? ($g($idxMsgDate, $row) ?? '');
             $stmt->execute([
                 $g($idxRowId,    $row),
                 $locId,
@@ -306,8 +316,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                 $sourceFile,
             ]);
             $count++;
+            if ($txDateRaw !== '') {
+                $clean = preg_replace('/(st|nd|rd|th)/i', '', $txDateRaw);
+                foreach (['M j Y, h:i:s A','M j Y','Y-m-d H:i:s','Y-m-d','m/d/Y','d/m/Y'] as $fmt) {
+                    $dt = DateTime::createFromFormat($fmt, trim($clean));
+                    if ($dt && ($latestDt === null || $dt > $latestDt)) {
+                        $latestDt  = $dt;
+                        $latestRaw = $txDateRaw;
+                    }
+                }
+            }
         }
         $db->commit();
+        $db->prepare('INSERT INTO csv_audit_log (source_file, latest_tx_date, row_count) VALUES (?,?,?)')
+           ->execute([$sourceFile, $latestRaw, $count]);
         fclose($fh);
         @unlink($tmpPath);
 
@@ -331,6 +353,27 @@ $creditLimits  = getCreditLimits();
 $processedData = getTransactionData();
 $ghlLocations  = getGhlLocations();
 $ghlNameMap    = array_column($ghlLocations, 'name', 'id');
+
+// Seed audit log on first load if empty
+if ((int)getDb()->query('SELECT COUNT(*) FROM csv_audit_log')->fetchColumn() === 0) {
+    $txDates = getDb()->query('SELECT tx_date FROM transactions WHERE tx_date IS NOT NULL AND tx_date <> ""')->fetchAll(PDO::FETCH_COLUMN);
+    $seedDt = null; $seedRaw = '';
+    foreach ($txDates as $raw) {
+        $clean = preg_replace('/(st|nd|rd|th)/i', '', $raw);
+        foreach (['M j Y, h:i:s A','M j Y','Y-m-d H:i:s','Y-m-d','m/d/Y','d/m/Y'] as $fmt) {
+            $dt = DateTime::createFromFormat($fmt, trim($clean));
+            if ($dt && ($seedDt === null || $dt > $seedDt)) { $seedDt = $dt; $seedRaw = $raw; }
+        }
+    }
+    if ($seedDt) {
+        $total = (int)getDb()->query('SELECT COUNT(*) FROM transactions')->fetchColumn();
+        getDb()->prepare('INSERT INTO csv_audit_log (source_file, latest_tx_date, row_count) VALUES (?,?,?)')
+               ->execute(['(initial data)', $seedRaw, $total]);
+    }
+}
+$auditLog = getDb()->query(
+    'SELECT source_file, latest_tx_date, row_count, created_at FROM csv_audit_log ORDER BY created_at DESC LIMIT 50'
+)->fetchAll();
 
 // ─── Build Subaccount Data ────────────────────────────────────────────────────
 
@@ -946,6 +989,45 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
         </div>
     </div>
 
+    <!-- ── IMPORT HISTORY panel ── -->
+    <div class="panel open" id="auditPanel">
+        <div class="panel-hdr" id="auditToggle">
+            <div class="panel-hdr-l">
+                <span class="panel-ttl">Import History</span>
+            </div>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="panel-body">
+            <div class="tbl-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>File</th>
+                            <th>Latest Transaction Date</th>
+                            <th>Rows Imported</th>
+                            <th>Uploaded At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($auditLog as $i => $entry): ?>
+                        <tr>
+                            <td><?= $i + 1 ?></td>
+                            <td><?= htmlspecialchars($entry['source_file']) ?></td>
+                            <td><?= htmlspecialchars($entry['latest_tx_date']) ?></td>
+                            <td><?= number_format((int)$entry['row_count']) ?></td>
+                            <td><?= htmlspecialchars($entry['created_at']) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($auditLog)): ?>
+                        <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No imports recorded yet.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- ── INDIVIDUAL: Monthly transactions panel ── -->
     <div class="panel open" id="monthPanel" style="display:none">
         <div class="panel-hdr" id="monthToggle">
@@ -1138,6 +1220,9 @@ document.querySelectorAll('.utab').forEach(btn => {
 // ── Panel toggles ──
 document.getElementById('subToggle').addEventListener('click', () => {
     document.getElementById('subPanel').classList.toggle('open');
+});
+document.getElementById('auditToggle').addEventListener('click', () => {
+    document.getElementById('auditPanel').classList.toggle('open');
 });
 document.getElementById('monthToggle').addEventListener('click', () => {
     document.getElementById('monthPanel').classList.toggle('open');
