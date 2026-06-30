@@ -377,6 +377,32 @@ if ((int)getDb()->query('SELECT COUNT(*) FROM csv_audit_log')->fetchColumn() ===
                ->execute(['(initial data)', $seedFirstRaw, $seedLatestRaw, $total]);
     }
 }
+// Backfill any audit rows missing first_tx_date
+$auditRows = getDb()->query(
+    'SELECT id, source_file FROM csv_audit_log WHERE first_tx_date = "" OR first_tx_date IS NULL'
+)->fetchAll();
+foreach ($auditRows as $ar) {
+    $sf  = $ar['source_file'];
+    $sql = $sf === '(initial data)'
+        ? 'SELECT tx_date FROM transactions WHERE tx_date IS NOT NULL AND tx_date <> ""'
+        : 'SELECT tx_date FROM transactions WHERE source_file = ? AND tx_date IS NOT NULL AND tx_date <> ""';
+    $s = getDb()->prepare($sql);
+    $sf === '(initial data)' ? $s->execute() : $s->execute([$sf]);
+    $dates = $s->fetchAll(PDO::FETCH_COLUMN);
+    $firstDt = null; $firstRaw = '';
+    foreach ($dates as $raw) {
+        $clean = preg_replace('/(st|nd|rd|th)/i', '', $raw);
+        foreach (['M j Y, h:i:s A','M j Y','Y-m-d H:i:s','Y-m-d','m/d/Y','d/m/Y'] as $fmt) {
+            $dt = DateTime::createFromFormat($fmt, trim($clean));
+            if ($dt && ($firstDt === null || $dt < $firstDt)) { $firstDt = $dt; $firstRaw = $raw; }
+        }
+    }
+    if ($firstDt) {
+        getDb()->prepare('UPDATE csv_audit_log SET first_tx_date = ? WHERE id = ?')
+               ->execute([$firstRaw, $ar['id']]);
+    }
+}
+
 $auditLog = getDb()->query(
     'SELECT source_file, first_tx_date, latest_tx_date, created_at FROM csv_audit_log ORDER BY created_at DESC LIMIT 5'
 )->fetchAll();
