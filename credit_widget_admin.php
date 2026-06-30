@@ -948,6 +948,45 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
         <?php endforeach; ?>
     </div>
 
+    <!-- ── IMPORT HISTORY panel ── -->
+    <div class="panel open" id="auditPanel">
+        <div class="panel-hdr" id="auditToggle">
+            <div class="panel-hdr-l">
+                <span class="panel-ttl">Import History</span>
+            </div>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="panel-body">
+            <div class="tbl-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>File</th>
+                            <th>First Transaction Date</th>
+                            <th>Latest Transaction Date</th>
+                            <th>Uploaded At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($auditLog as $i => $entry): ?>
+                        <tr>
+                            <td><?= $i + 1 ?></td>
+                            <td><?= htmlspecialchars($entry['source_file']) ?></td>
+                            <td><?= htmlspecialchars($entry['first_tx_date']) ?></td>
+                            <td><?= htmlspecialchars($entry['latest_tx_date']) ?></td>
+                            <td><?= htmlspecialchars($entry['created_at']) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($auditLog)): ?>
+                        <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No imports recorded yet.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- ── ALL: Subaccounts table panel ── -->
     <div class="panel open" id="subPanel">
         <div class="panel-hdr" id="subToggle">
@@ -1015,45 +1054,6 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
                             </td>
                         </tr>
                         <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- ── IMPORT HISTORY panel ── -->
-    <div class="panel open" id="auditPanel">
-        <div class="panel-hdr" id="auditToggle">
-            <div class="panel-hdr-l">
-                <span class="panel-ttl">Import History</span>
-            </div>
-            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div class="panel-body">
-            <div class="tbl-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>File</th>
-                            <th>First Transaction Date</th>
-                            <th>Latest Transaction Date</th>
-                            <th>Uploaded At</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($auditLog as $i => $entry): ?>
-                        <tr>
-                            <td><?= $i + 1 ?></td>
-                            <td><?= htmlspecialchars($entry['source_file']) ?></td>
-                            <td><?= htmlspecialchars($entry['first_tx_date']) ?></td>
-                            <td><?= htmlspecialchars($entry['latest_tx_date']) ?></td>
-                            <td><?= htmlspecialchars($entry['created_at']) ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                        <?php if (empty($auditLog)): ?>
-                        <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No imports recorded yet.</td></tr>
-                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
