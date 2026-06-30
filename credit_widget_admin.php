@@ -1005,7 +1005,6 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
                             <th>#</th>
                             <th>File</th>
                             <th>Latest Transaction Date</th>
-                            <th>Rows Imported</th>
                             <th>Uploaded At</th>
                         </tr>
                     </thead>
@@ -1015,12 +1014,11 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
                             <td><?= $i + 1 ?></td>
                             <td><?= htmlspecialchars($entry['source_file']) ?></td>
                             <td><?= htmlspecialchars($entry['latest_tx_date']) ?></td>
-                            <td><?= number_format((int)$entry['row_count']) ?></td>
                             <td><?= htmlspecialchars($entry['created_at']) ?></td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($auditLog)): ?>
-                        <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No imports recorded yet.</td></tr>
+                        <tr><td colspan="4" style="text-align:center;color:var(--text2);padding:24px;">No imports recorded yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -1220,9 +1218,6 @@ document.querySelectorAll('.utab').forEach(btn => {
 // ── Panel toggles ──
 document.getElementById('subToggle').addEventListener('click', () => {
     document.getElementById('subPanel').classList.toggle('open');
-});
-document.getElementById('auditToggle').addEventListener('click', () => {
-    document.getElementById('auditPanel').classList.toggle('open');
 });
 document.getElementById('monthToggle').addEventListener('click', () => {
     document.getElementById('monthPanel').classList.toggle('open');
