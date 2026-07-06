@@ -975,7 +975,7 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
                             <td><?= htmlspecialchars($entry['source_file']) ?></td>
                             <td><?= htmlspecialchars($entry['first_tx_date']) ?></td>
                             <td><?= htmlspecialchars($entry['latest_tx_date']) ?></td>
-                            <td><?= htmlspecialchars($entry['created_at']) ?></td>
+                            <td><?= (new DateTime($entry['created_at'], new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('Asia/Kuala_Lumpur'))->format('d M Y, h:i A') ?></td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($auditLog)): ?>
