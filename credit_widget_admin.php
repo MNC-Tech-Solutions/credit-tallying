@@ -987,79 +987,6 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
         </div>
     </div>
 
-    <!-- ── ALL: Subaccounts table panel ── -->
-    <div class="panel open" id="subPanel">
-        <div class="panel-hdr" id="subToggle">
-            <div class="panel-hdr-l">
-                <span class="panel-ttl">Subaccounts</span>
-                <span class="chip"><?php echo count($processedData); ?> accounts</span>
-            </div>
-            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div class="panel-body">
-            <div class="tbl-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Subaccount</th>
-                            <th class="r">WA Spent</th>
-                            <th>WA Usage</th>
-                            <th class="r">Email Spent</th>
-                            <th>Email Usage</th>
-                            <th class="r">Call Spent</th>
-                            <th>Call Usage</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($subRows as $i => $r):
-                            $active   = ($r['waUsed'] + $r['emUsed'] + $r['callUsed']) > 0;
-                            $waExc    = $r['waPct']   >= 100;
-                            $emExc    = $r['emPct']   >= 100;
-                            $callExc  = $r['callPct'] >= 100;
-                        ?>
-                        <tr style="cursor:default">
-                            <td style="color:var(--text3);font-size:13px"><?php echo $i + 1; ?></td>
-                            <td>
-                                <div class="td-name"><?php echo htmlspecialchars($r['name']); ?></div>
-                                <div class="td-id"><?php echo htmlspecialchars($r['id']); ?></div>
-                            </td>
-                            <td class="td-amt wa r">RM <?php echo number_format($r['waUsed'], 2); ?></td>
-                            <td>
-                                <div class="mini-bar-wrap">
-                                    <div class="mini-bar"><div class="mini-fill wa <?php echo $waExc ? 'exceeded' : ''; ?>" style="width:<?php echo $r['waPct']; ?>%"></div></div>
-                                    <span class="mini-pct <?php echo $waExc ? 'exceeded' : ''; ?>"><?php echo $r['waPct']; ?>%</span>
-                                </div>
-                            </td>
-                            <td class="td-amt em r">RM <?php echo number_format($r['emUsed'], 2); ?></td>
-                            <td>
-                                <div class="mini-bar-wrap">
-                                    <div class="mini-bar"><div class="mini-fill em <?php echo $emExc ? 'exceeded' : ''; ?>" style="width:<?php echo $r['emPct']; ?>%"></div></div>
-                                    <span class="mini-pct <?php echo $emExc ? 'exceeded' : ''; ?>"><?php echo $r['emPct']; ?>%</span>
-                                </div>
-                            </td>
-                            <td class="td-amt call r">RM <?php echo number_format($r['callUsed'], 2); ?></td>
-                            <td>
-                                <div class="mini-bar-wrap">
-                                    <div class="mini-bar"><div class="mini-fill call <?php echo $callExc ? 'exceeded' : ''; ?>" style="width:<?php echo $r['callPct']; ?>%"></div></div>
-                                    <span class="mini-pct <?php echo $callExc ? 'exceeded' : ''; ?>"><?php echo $r['callPct']; ?>%</span>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="pill <?php echo $active ? 'pill-active' : 'pill-inactive'; ?>">
-                                    <span class="pdot <?php echo $active ? 'pdot-active' : 'pdot-inactive'; ?>"></span>
-                                    <?php echo $active ? 'Active' : 'Inactive'; ?>
-                                </span>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
     <!-- ── INDIVIDUAL: Monthly transactions panel ── -->
     <div class="panel open" id="monthPanel" style="display:none">
         <div class="panel-hdr" id="monthToggle">
@@ -1250,9 +1177,6 @@ document.querySelectorAll('.utab').forEach(btn => {
 });
 
 // ── Panel toggles ──
-document.getElementById('subToggle').addEventListener('click', () => {
-    document.getElementById('subPanel').classList.toggle('open');
-});
 document.getElementById('monthToggle').addEventListener('click', () => {
     document.getElementById('monthPanel').classList.toggle('open');
 });
@@ -1433,7 +1357,6 @@ document.getElementById('subSel').addEventListener('change', function () {
     applyCard('call', d);
 
     const isAll = key === '';
-    document.getElementById('subPanel').style.display    = isAll ? '' : 'none';
     document.getElementById('auditPanel').style.display  = isAll ? '' : 'none';
     document.getElementById('monthPanel').style.display  = isAll ? 'none' : '';
 
