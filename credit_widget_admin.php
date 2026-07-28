@@ -144,6 +144,40 @@ function getLocationMonthlyData(string $locId): array {
     return $monthlyData;
 }
 
+function getTopupHistory(string $locId): array {
+    $topups = [];
+    $stmt = getDb()->prepare(
+        'SELECT topup_date, wa_credits, email_credits, call_credits, added_by, notes
+         FROM credit_topups
+         WHERE location_id = ?
+         ORDER BY topup_date DESC'
+    );
+    $stmt->execute([$locId]);
+    while ($row = $stmt->fetch()) {
+        $wa   = floatval($row['wa_credits'] ?? 0);
+        $em   = floatval($row['email_credits'] ?? 0);
+        $call = floatval($row['call_credits'] ?? 0);
+
+        $waRm   = $wa * 0.50;
+        $emRm   = $em * 0.005;
+        $callRm = $call * 0.054;
+
+        $topups[] = [
+            'date'            => trim($row['topup_date'] ?? ''),
+            'whatsappCredits' => $wa,
+            'emailCredits'    => $em,
+            'callCredits'     => $call,
+            'whatsappRm'      => $waRm,
+            'emailRm'         => $emRm,
+            'callRm'          => $callRm,
+            'totalRm'         => $waRm + $emRm + $callRm,
+            'addedBy'         => trim($row['added_by'] ?? ''),
+            'notes'           => trim($row['notes'] ?? ''),
+        ];
+    }
+    return $topups;
+}
+
 function getGhlLocations(): array {
     $cacheFile = sys_get_temp_dir() . '/ghl_locations.json';
     $cacheTtl  = 300;
@@ -348,6 +382,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'locatio
     header('Content-Type: application/json');
     $locId = trim($_GET['location_id'] ?? '');
     echo $locId ? json_encode(getLocationMonthlyData($locId)) : '{}';
+    exit;
+}
+
+// AJAX endpoint: top-up history for one location
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'topup_history') {
+    header('Content-Type: application/json');
+    $locId = trim($_GET['location_id'] ?? '');
+    if ($locId === '') {
+        echo json_encode(['ok' => false, 'error' => 'location_id is required']);
+        exit;
+    }
+
+    $history = getTopupHistory($locId);
+    echo json_encode([
+        'ok' => true,
+        'locationId' => $locId,
+        'count' => count($history),
+        'history' => $history,
+        'totals' => [
+            'whatsappCredits' => array_sum(array_column($history, 'whatsappCredits')),
+            'emailCredits' => array_sum(array_column($history, 'emailCredits')),
+            'callCredits' => array_sum(array_column($history, 'callCredits')),
+            'whatsappRm' => array_sum(array_column($history, 'whatsappRm')),
+            'emailRm' => array_sum(array_column($history, 'emailRm')),
+            'callRm' => array_sum(array_column($history, 'callRm')),
+            'totalRm' => array_sum(array_column($history, 'totalRm')),
+        ],
+    ]);
     exit;
 }
 
@@ -780,6 +842,45 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
     .form-msg.ok{background:var(--wa-soft);border:1px solid rgba(37,211,102,.2);color:#1a7a45;}
     .form-msg.show{display:block;}
     @media(max-width:520px){.form-grid{grid-template-columns:1fr;}}
+
+    /* TOPUP SUMMARY STRIP */
+    .topup-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:20px 24px;border-bottom:1px solid var(--border);background:var(--surface);}
+    .ts-tile{display:flex;flex-direction:column;gap:2px;}
+    .ts-lbl{font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);}
+    .ts-val{font-family:'DM Serif Display',serif;font-size:20px;color:var(--text);}
+    .ts-sub{font-size:11px;color:var(--text3);}
+    .topup-empty{padding:20px 24px;font-size:14px;color:var(--text2);text-align:center;}
+    .topup-empty strong{color:var(--text);}
+    @media(max-width:700px){
+        .topup-summary{grid-template-columns:repeat(2,1fr);}
+    }
+
+    .credit-cell{display:inline-flex;flex-direction:column;align-items:flex-end;gap:2px;}
+    .credit-main{font-size:13.5px;font-weight:700;}
+    .credit-sub{font-size:11px;color:var(--text3);}
+    .nil{color:var(--text3);font-size:13px;}
+    .avatar{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);border:1px solid rgba(124,58,237,.15);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent);flex-shrink:0;}
+    .added-cell{display:inline-flex;align-items:center;gap:8px;}
+    .total-row td{padding:13px 20px;font-weight:700;background:var(--bg);border-top:2px solid var(--border2);}
+    .total-label{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text2);}
+
+    /* TOPUP TABLE */
+    .tbl-scroll{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;}
+    thead tr{background:var(--bg);}
+    thead th{padding:11px 20px;font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+    th.r,td.r{text-align:right;}
+    tbody tr{border-bottom:1px solid var(--border);transition:background .12s;}
+    tbody tr:last-child{border-bottom:none;}
+    tbody tr:hover{background:var(--surface);}
+    tbody td{padding:13px 20px;font-size:13.5px;vertical-align:middle;}
+    .td-date{font-weight:600;color:var(--text);}
+    .td-type{color:var(--text);font-weight:500;}
+    .td-amt{font-weight:700;font-variant-numeric:tabular-nums;}
+    .td-amt.wa{color:var(--wa);}
+    .td-amt.em{color:var(--em);}
+    .td-amt.call{color:var(--call);}
+    
     /* ── CSV DROP ZONE ── */
     .drop-zone{border:2px dashed var(--border2);border-radius:var(--r-sm);padding:36px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--surface);}
     .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:var(--accent-soft);}
@@ -1017,7 +1118,38 @@ usort($subRows, fn($a, $b) => ($b['waUsed'] + $b['emUsed'] + $b['callUsed']) <=>
         </div>
     </div>
 
-
+    <!-- TOP-UP HISTORY PANEL -->
+    <div class="panel" id="topupPanel" style="display:none;">
+        <div class="panel-hdr" id="topupToggle">
+            <div class="panel-hdr-l">
+                <span class="panel-ttl" id="topupPanelTitle">Top-up History</span>
+                <span class="chip" id="topupBadge" style="display:none;"></span>
+            </div>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="panel-body">
+            <div class="topup-empty" id="topupEmpty">Select a subaccount to view top-up history.</div>
+            <div id="topupContent" style="display:none;">
+                <div class="topup-summary" id="topupSummary"></div>
+                <div class="tbl-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th class="r">WhatsApp Credits</th>
+                                <th class="r">Email Credits</th>
+                                <th class="r">Call Credits</th>
+                                <th class="r">Total (RM)</th>
+                                <th>Added By</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topupTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div><!-- /wrap -->
 
 <!-- TRANSACTION MODAL (individual month category) -->
@@ -1180,6 +1312,9 @@ document.querySelectorAll('.utab').forEach(btn => {
 document.getElementById('monthToggle').addEventListener('click', () => {
     document.getElementById('monthPanel').classList.toggle('open');
 });
+document.getElementById('topupToggle').addEventListener('click', () => {
+    document.getElementById('topupPanel').classList.toggle('open');
+});
 
 // ── Formatters ──
 function fmt0(n) { return Math.abs(n).toLocaleString('en-US', {maximumFractionDigits:0}); }
@@ -1187,6 +1322,157 @@ function fmt2(n) { return Math.abs(n).toLocaleString('en-US', {minimumFractionDi
 function signedC(n)  { return (n < 0 ? '−' : '') + fmt0(n); }
 function signedRM(n) { return (n < 0 ? '−' : '') + 'RM ' + fmt2(n); }
 function formatDate(d) { return d.toLocaleDateString('en-MY', {day:'numeric', month:'short', year:'numeric'}); }
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[ch]);
+}
+function parseYmd(value) {
+    const parts = String(value || '').split('-').map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+function formatTopupDate(value) {
+    const dt = parseYmd(value);
+    return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : value;
+}
+
+const topupPanel   = document.getElementById('topupPanel');
+const topupBadge   = document.getElementById('topupBadge');
+const topupTitle   = document.getElementById('topupPanelTitle');
+const topupEmpty   = document.getElementById('topupEmpty');
+const topupContent = document.getElementById('topupContent');
+const topupSummary = document.getElementById('topupSummary');
+const topupTbody   = document.getElementById('topupTbody');
+const topupCache   = {};
+let topupRequestId = 0;
+
+function renderTopupHistory(label, payload) {
+    const history = payload?.history || [];
+    const totals  = payload?.totals  || {};
+
+    topupTitle.textContent = label ? `${label} Top-up History` : 'Top-up History';
+    topupBadge.textContent = `${history.length} top-up${history.length !== 1 ? 's' : ''}`;
+    topupBadge.style.display = 'inline-flex';
+
+    if (!history.length) {
+        topupEmpty.innerHTML = '<strong>No top-ups recorded for this subaccount.</strong>';
+        topupEmpty.style.display = 'block';
+        topupContent.style.display = 'none';
+        return;
+    }
+
+    topupEmpty.style.display = 'none';
+    topupContent.style.display = 'block';
+
+    topupSummary.innerHTML = `
+        <div class="ts-tile">
+            <div class="ts-lbl">Total Topped Up</div>
+            <div class="ts-val">RM ${fmt2(totals.totalRm || 0)}</div>
+            <div class="ts-sub">for this subaccount</div>
+        </div>
+        <div class="ts-tile">
+            <div class="ts-lbl">WhatsApp Credits</div>
+            <div class="ts-val" style="color:var(--wa);">+${fmt0(totals.whatsappCredits || 0)}</div>
+            <div class="ts-sub">RM ${fmt2(totals.whatsappRm || 0)} total</div>
+        </div>
+        <div class="ts-tile">
+            <div class="ts-lbl">Email Credits</div>
+            <div class="ts-val" style="color:var(--em);">+${fmt0(totals.emailCredits || 0)}</div>
+            <div class="ts-sub">RM ${fmt2(totals.emailRm || 0)} total</div>
+        </div>
+        <div class="ts-tile">
+            <div class="ts-lbl">Call Credits</div>
+            <div class="ts-val" style="color:var(--call);">+${fmt0(totals.callCredits || 0)}</div>
+            <div class="ts-sub">RM ${fmt2(totals.callRm || 0)} total</div>
+        </div>
+    `;
+
+    topupTbody.innerHTML = history.map(t => {
+        const hasWa = Number(t.whatsappCredits || 0) > 0;
+        const hasEm = Number(t.emailCredits || 0) > 0;
+        const hasCall = Number(t.callCredits || 0) > 0;
+        return `
+            <tr>
+                <td class="td-date">${escapeHtml(formatTopupDate(t.date))}</td>
+                <td class="r">
+                    ${hasWa ? `
+                        <span class="credit-cell">
+                            <span class="credit-main" style="color:var(--wa);">+${fmt0(t.whatsappCredits)}</span>
+                            <span class="credit-sub">RM ${fmt2(t.whatsappRm)}</span>
+                        </span>` : '<span class="nil">—</span>'}
+                </td>
+                <td class="r">
+                    ${hasEm ? `
+                        <span class="credit-cell">
+                            <span class="credit-main" style="color:var(--em);">+${fmt0(t.emailCredits)}</span>
+                            <span class="credit-sub">RM ${fmt2(t.emailRm)}</span>
+                        </span>` : '<span class="nil">—</span>'}
+                </td>
+                <td class="r">
+                    ${hasCall ? `
+                        <span class="credit-cell">
+                            <span class="credit-main" style="color:var(--call);">+${fmt0(t.callCredits)}</span>
+                            <span class="credit-sub">RM ${fmt2(t.callRm)}</span>
+                        </span>` : '<span class="nil">—</span>'}
+                </td>
+                <td class="r" style="font-family:'DM Serif Display',serif;font-size:16px;color:var(--text);">
+                    RM ${fmt2(t.totalRm)}
+                </td>
+                <td>
+                    ${t.addedBy ? `
+                        <span class="added-cell">
+                            <span class="avatar">${escapeHtml(String(t.addedBy).slice(0,1).toUpperCase())}</span>
+                            <span style="font-size:13.5px;color:var(--text);">${escapeHtml(t.addedBy)}</span>
+                        </span>` : '<span class="nil">—</span>'}
+                </td>
+                <td style="font-size:13px;color:var(--text2);max-width:200px;">
+                    ${t.notes ? escapeHtml(t.notes) : '<span class="nil">—</span>'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadTopupHistory(locId, label) {
+    const requestId = ++topupRequestId;
+    const cached = topupCache[locId];
+    if (cached) {
+        if (requestId !== topupRequestId) return;
+        topupPanel.style.display = '';
+        topupPanel.classList.add('open');
+        renderTopupHistory(label, cached);
+        return;
+    }
+
+    topupPanel.style.display = '';
+    topupPanel.classList.add('open');
+    topupTitle.textContent = label ? `${label} Top-up History` : 'Top-up History';
+    topupBadge.textContent = 'Loading…';
+    topupBadge.style.display = 'inline-flex';
+    topupEmpty.innerHTML = 'Loading top-up history…';
+    topupEmpty.style.display = 'block';
+    topupContent.style.display = 'none';
+
+    try {
+        const res = await fetch('?action=topup_history&location_id=' + encodeURIComponent(locId));
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Failed to load top-up history.');
+        topupCache[locId] = data;
+        if (requestId !== topupRequestId) return;
+        renderTopupHistory(label, data);
+    } catch (err) {
+        if (requestId !== topupRequestId) return;
+        topupBadge.textContent = '0 top-ups';
+        topupEmpty.innerHTML = '<strong>Failed to load top-up history.</strong>';
+        topupEmpty.style.display = 'block';
+        topupContent.style.display = 'none';
+    }
+}
 
 // ── Apply card metrics + progress ──
 function applyCard(cls, d) {
@@ -1348,7 +1634,8 @@ const zeroData = {
 };
 
 // ── Subaccount selector ──
-document.getElementById('subSel').addEventListener('change', function () {
+const subSel = document.getElementById('subSel');
+subSel.addEventListener('change', function () {
     const key = this.value;
     const d   = subaccountData[key] || (key === '' ? subaccountData[''] : zeroData);
 
@@ -1357,33 +1644,51 @@ document.getElementById('subSel').addEventListener('change', function () {
     applyCard('call', d);
 
     const isAll = key === '';
+    const label = isAll ? '' : (this.selectedOptions[0]?.textContent || key).trim();
     document.getElementById('auditPanel').style.display  = isAll ? '' : 'none';
     document.getElementById('monthPanel').style.display  = isAll ? 'none' : '';
+    topupPanel.style.display = isAll ? 'none' : '';
+    if (isAll) {
+        currentLocId = '';
+        topupRequestId++;
+        return;
+    }
 
-    if (!isAll) {
-        currentLocId = key;
-        resetDateRange();
-        document.getElementById('monthPanel').classList.add('open');
+    currentLocId = key;
+    try {
+        localStorage.setItem('creditWidgetAdminSelectedLocation', key);
+    } catch (e) {}
+    resetDateRange();
+    document.getElementById('monthPanel').classList.add('open');
+    loadTopupHistory(key, label);
 
-        // Fetch monthly data on demand — only for the selected location
-        if (!Object.keys((subaccountData[key] || {}).monthlyData || {}).length) {
-            document.getElementById('rangeHint').textContent = 'Loading…';
-            fetch('?action=location_data&location_id=' + encodeURIComponent(key))
-                .then(r => r.json())
-                .then(md => {
-                    if (!subaccountData[key]) subaccountData[key] = Object.assign({}, zeroData);
-                    subaccountData[key].monthlyData = md;
-                    setDateBounds(key);
-                    document.getElementById('rangeHint').textContent = '';
-                })
-                .catch(() => {
-                    document.getElementById('rangeHint').textContent = 'Failed to load.';
-                });
-        } else {
-            setDateBounds(key);
-        }
+    // Fetch monthly data on demand — only for the selected location
+    if (!Object.keys((subaccountData[key] || {}).monthlyData || {}).length) {
+        document.getElementById('rangeHint').textContent = 'Loading…';
+        fetch('?action=location_data&location_id=' + encodeURIComponent(key))
+            .then(r => r.json())
+            .then(md => {
+                if (!subaccountData[key]) subaccountData[key] = Object.assign({}, zeroData);
+                subaccountData[key].monthlyData = md;
+                setDateBounds(key);
+                document.getElementById('rangeHint').textContent = '';
+            })
+            .catch(() => {
+                document.getElementById('rangeHint').textContent = 'Failed to load.';
+            });
+    } else {
+        setDateBounds(key);
     }
 });
+
+let savedSubSel = '';
+try {
+    savedSubSel = localStorage.getItem('creditWidgetAdminSelectedLocation') || '';
+} catch (e) {}
+if (savedSubSel && [...subSel.options].some(opt => opt.value === savedSubSel)) {
+    subSel.value = savedSubSel;
+}
+subSel.dispatchEvent(new Event('change'));
 
 // ── Transaction modal ──
 function openTxModal(cat, rangeLabel) {
@@ -1443,6 +1748,9 @@ function openTopupModal() {
     document.getElementById('topupOk').classList.remove('show');
     document.getElementById('topupForm').reset();
     document.getElementById('tu_date').value = new Date().toISOString().slice(0, 10);
+    if (currentLocId) {
+        document.getElementById('tu_loc').value = currentLocId;
+    }
     topupModal.classList.add('on');
     document.body.style.overflow = 'hidden';
 }
