@@ -11,6 +11,18 @@ ini_set('memory_limit', '512M');
 define('ALERT_WEBHOOK_URL', 'https://services.leadconnectorhq.com/hooks/BXuCudh2EKUEmv1gC4ai/webhook-trigger/9599e28d-0783-43f9-9646-a14396316e75');
 define('THRESHOLD_PERCENT', 80);
 
+// Zero-amount transactions are only excluded from billing/display starting this date.
+// Transactions before this date still charge the flat rate regardless of amount.
+// Keep in sync with credit_widget.php.
+const ZERO_AMOUNT_EXCLUDE_SINCE = '2026-08-01';
+
+// From this date, zero-amount WhatsApp (service) messages are billed again: the first
+// SERVICE_MSG_FREE_QUOTA per subaccount each calendar month are free, every one after
+// that in the same month is charged SERVICE_MSG_RATE.
+const SERVICE_MSG_CHARGE_SINCE = '2026-10-01';
+const SERVICE_MSG_FREE_QUOTA   = 1000;
+const SERVICE_MSG_RATE         = 0.10;
+
 // ─── Runtime detection ────────────────────────────────────────────────────────
 
 $isCli  = (php_sapi_name() === 'cli');
@@ -60,35 +72,127 @@ function getCreditLimits(): array {
     return $limits;
 }
 
-// Returns usage (RM spent) and location names aggregated from transactions table
+// SQL boolean: tx_date is in or after the month of $since. tx_date is stored as a
+// formatted string like "Aug 1st 2026, 10:23:45 AM", so we compare year/month only
+// (cutoffs are always the 1st of a month) using plain string functions — keeps the
+// filter usable directly in SQL on a large/growing table.
+function txOnOrAfterSql(string $since): string {
+    $cutoff = new DateTime($since);
+    $year   = (int)$cutoff->format('Y');
+    $month  = (int)$cutoff->format('n');
+    $txYear = "CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(tx_date, ',', 1), ' ', -1) AS UNSIGNED)";
+    return "($txYear > $year OR ($txYear = $year
+        AND FIELD(LEFT(tx_date, 3), 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec') >= $month))";
+}
+
+// SQL expression: tx_date's month as "YYYY-MM" (same string format as txOnOrAfterSql()).
+function txMonthSql(): string {
+    return "CONCAT(SUBSTRING_INDEX(SUBSTRING_INDEX(tx_date, ',', 1), ' ', -1), '-',
+        LPAD(FIELD(LEFT(tx_date, 3), 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'), 2, '0'))";
+}
+
+// SQL boolean: zero-amount WhatsApp service message dated on/after SERVICE_MSG_CHARGE_SINCE.
+function serviceMessageSql(): string {
+    return "((amount IS NOT NULL AND amount = 0)
+        AND (IFNULL(type, '') LIKE '%WhatsApp%' OR IFNULL(description, '') LIKE '%whatsapp%')
+        AND " . txOnOrAfterSql(SERVICE_MSG_CHARGE_SINCE) . ")";
+}
+
+// SQL boolean expression: TRUE unless the row is a zero-amount transaction dated
+// on/after ZERO_AMOUNT_EXCLUDE_SINCE. Service messages (see serviceMessageSql())
+// are kept so they can be priced.
+function zeroAmountExcludeSql(): string {
+    static $sql = null;
+    if ($sql !== null) return $sql;
+    $sql = "NOT (
+        (amount IS NOT NULL AND amount = 0)
+        AND " . txOnOrAfterSql(ZERO_AMOUNT_EXCLUDE_SINCE) . "
+        AND NOT " . serviceMessageSql() . "
+    )";
+    return $sql;
+}
+
+// Total RM billed for a subaccount's $count service messages in one month.
+function serviceMessageCharge(int $count): float {
+    return max(0, $count - SERVICE_MSG_FREE_QUOTA) * SERVICE_MSG_RATE;
+}
+
+// Returns usage (RM spent) and location names from transactions table.
+// WhatsApp/Email follow credit_widget.php: match on type OR description, flat rate per row.
 function getUsageFromDb(): array {
-    $usage = [];
-    $names = [];
+    $usage        = [];
+    $names        = [];
+    $serviceCount = [];
     $stmt = getDb()->query(
-        'SELECT location_id, MAX(location_name) AS location_name,
-                type, COUNT(*) AS cnt, SUM(ABS(IFNULL(amount,0))) AS sum_amount
+        'SELECT location_id, location_name, type, description, amount,
+                ' . serviceMessageSql() . ' AS is_service, ' . txMonthSql() . ' AS tx_month
          FROM transactions
-         GROUP BY location_id, type'
+         WHERE ' . zeroAmountExcludeSql()
     );
     while ($row = $stmt->fetch()) {
-        $locId = trim($row['location_id']);
-        $type  = trim($row['type']);
+        if (empty($row['location_id']) || empty($row['type'])) continue;
+        $locId       = trim($row['location_id']);
+        $type        = trim($row['type']);
+        $description = strtolower(trim($row['description'] ?? ''));
 
-        if (stripos($type, 'WhatsApp') !== false) {
-            $usageType = 'WhatsApp'; $cost = intval($row['cnt']) * 0.50;
-        } elseif (stripos($type, 'Emails') !== false) {
-            $usageType = 'Email'; $cost = intval($row['cnt']) * 0.005;
+        if (!empty($row['is_service'])) {
+            // Priced after the loop once the subaccount's total is known
+            $month = $row['tx_month'];
+            $serviceCount[$locId][$month] = ($serviceCount[$locId][$month] ?? 0) + 1;
+            $usageType = 'WhatsApp'; $cost = 0.0;
+        } elseif (stripos($type, 'WhatsApp') !== false || stripos($description, 'whatsapp') !== false) {
+            $usageType = 'WhatsApp'; $cost = 0.50;
+        } elseif (stripos($type, 'Emails') !== false || stripos($description, 'emails') !== false) {
+            $usageType = 'Email'; $cost = 0.005;
         } elseif ($type === 'Voice Minutes - Outbound Calls' || $type === 'Voice Minutes - Inbound Calls') {
-            $usageType = 'Call'; $cost = floatval($row['sum_amount']);
+            $usageType = 'Call'; $cost = abs(floatval($row['amount'] ?? 0));
         } else {
             continue;
         }
 
         if (!isset($usage[$locId][$usageType])) $usage[$locId][$usageType] = 0.0;
         $usage[$locId][$usageType] += $cost;
-        if (!isset($names[$locId])) $names[$locId] = trim($row['location_name'] ?? $locId);
+        if (!isset($names[$locId]) && !empty($row['location_name'])) $names[$locId] = trim($row['location_name']);
+    }
+    foreach ($serviceCount as $locId => $months) {
+        foreach ($months as $count) $usage[$locId]['WhatsApp'] += serviceMessageCharge($count);
     }
     return ['usage' => $usage, 'names' => $names];
+}
+
+// Allocated / used / exceed / balance in RM for one (location, usage type)
+function creditFigures(float $budget, float $used): array {
+    return [
+        'allocated' => round($budget, 2),
+        'used'      => round($used, 2),
+        'exceed'    => round(max(0, $used - $budget), 2),
+        'balance'   => round(max(0, $budget - $used), 2),
+    ];
+}
+
+// RM amount: whole ringgit with commas, but keep cents for small amounts (e.g. Email)
+function rm(float $v): string {
+    return 'RM' . number_format($v, $v < 100 ? 2 : 0);
+}
+
+// One short line per usage type, e.g. "WhatsApp 119% · RM17,914 / RM15,000 · Over RM2,914"
+function formatLine(string $usageType, float $budget, float $used): string {
+    if ($budget <= 0) {
+        return "• $usageType · Used " . rm($used);
+    }
+    $f    = creditFigures($budget, $used);
+    $pct  = round(($used / $budget) * 100);
+    $tail = $f['exceed'] > 0 ? 'Over ' . rm($f['exceed']) : 'Left ' . rm($f['balance']);
+    return "• $usageType $pct% · " . rm($used) . ' / ' . rm($budget) . " · $tail";
+}
+
+// Groups lines under each subaccount name
+function formatSection(string $title, array $byLocation): string {
+    $out = ["<b>$title</b>"];
+    foreach ($byLocation as $name => $lines) {
+        $out[] = '<br>' . htmlspecialchars($name) . '<br>' . implode('<br>', $lines);
+    }
+    return implode('<br>', $out);
 }
 
 function buildAlerts(array $usage, array $names, array $credits): array {
@@ -109,22 +213,22 @@ function buildAlerts(array $usage, array $names, array $credits): array {
             $name = $names[$locId] ?? $locId;
             if ($budget <= 0) {
                 if ($totalUsed > 0) {
-                    $alerts[]          = ['location_id' => $locId, 'location_name' => $name, 'usage_type' => $usageType];
-                    $summaryNoBudget[] = "- $name ($usageType): no budget allocated but credits used";
+                    $alerts[]                  = ['location_id' => $locId, 'location_name' => $name, 'usage_type' => $usageType] + creditFigures(0.0, $totalUsed);
+                    $summaryNoBudget[$name][]  = formatLine($usageType, 0.0, $totalUsed);
                 }
                 continue;
             }
             $pct = round(($totalUsed / $budget) * 100, 2);
             if ($pct >= THRESHOLD_PERCENT) {
-                $alerts[]               = ['location_id' => $locId, 'location_name' => $name, 'usage_type' => $usageType];
-                $summaryOverThreshold[] = "- $name ($usageType): $pct% of credits used";
+                $alerts[]                       = ['location_id' => $locId, 'location_name' => $name, 'usage_type' => $usageType, 'percent_used' => $pct] + creditFigures($budget, $totalUsed);
+                $summaryOverThreshold[$name][]  = formatLine($usageType, $budget, $totalUsed);
             }
         }
     }
 
     $parts = [];
-    if ($summaryNoBudget)     $parts[] = implode('<br>', $summaryNoBudget);
-    if ($summaryOverThreshold) $parts[] = implode('<br>', $summaryOverThreshold);
+    if ($summaryOverThreshold) $parts[] = formatSection('Over ' . THRESHOLD_PERCENT . '% used (Used / Allocated)', $summaryOverThreshold);
+    if ($summaryNoBudget)      $parts[] = formatSection('No budget allocated', $summaryNoBudget);
     $summary = implode('<br><br>', $parts);
 
     return ['alerts' => $alerts, 'summary' => $summary];

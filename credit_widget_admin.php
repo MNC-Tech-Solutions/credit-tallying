@@ -5,6 +5,95 @@
  * Fix: remaining shows negative (red) when exceeded. 
  * currently using in sj360
  */
+
+// Zero-amount transactions are only excluded from billing/display starting this date.
+// Transactions before this date still charge the flat rate regardless of amount.
+const ZERO_AMOUNT_EXCLUDE_SINCE = '2026-08-01';
+
+// From this date, zero-amount WhatsApp (service) messages are billed again: the first
+// SERVICE_MSG_FREE_QUOTA per subaccount each calendar month are free, every one after
+// that in the same month is charged SERVICE_MSG_RATE.
+const SERVICE_MSG_CHARGE_SINCE = '2026-10-01';
+const SERVICE_MSG_FREE_QUOTA   = 1000;
+const SERVICE_MSG_RATE         = 0.10;
+
+function parseTxDate(?string $raw): ?DateTime {
+    if (empty($raw)) return null;
+    $dateStr = preg_replace('/(st|nd|rd|th)/', '', $raw);
+    $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($dateStr));
+    return $date ?: null;
+}
+
+// SQL boolean: tx_date is in or after the month of $since. tx_date is stored as a
+// formatted string like "Aug 1st 2026, 10:23:45 AM", so we compare year/month only
+// (cutoffs are always the 1st of a month) using plain string functions — keeps the
+// filter usable directly in SQL on a large/growing table.
+function txOnOrAfterSql(string $since): string {
+    $cutoff = new DateTime($since);
+    $year   = (int)$cutoff->format('Y');
+    $month  = (int)$cutoff->format('n');
+    $txYear = "CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(tx_date, ',', 1), ' ', -1) AS UNSIGNED)";
+    return "($txYear > $year OR ($txYear = $year
+        AND FIELD(LEFT(tx_date, 3), 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec') >= $month))";
+}
+
+// SQL expression: tx_date's month as "YYYY-MM" (same string format as txOnOrAfterSql()).
+function txMonthSql(): string {
+    return "CONCAT(SUBSTRING_INDEX(SUBSTRING_INDEX(tx_date, ',', 1), ' ', -1), '-',
+        LPAD(FIELD(LEFT(tx_date, 3), 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'), 2, '0'))";
+}
+
+// SQL boolean: zero-amount WhatsApp service message dated on/after SERVICE_MSG_CHARGE_SINCE.
+function serviceMessageSql(): string {
+    return "((amount IS NOT NULL AND amount = 0)
+        AND (IFNULL(type, '') LIKE '%WhatsApp%' OR IFNULL(description, '') LIKE '%whatsapp%')
+        AND " . txOnOrAfterSql(SERVICE_MSG_CHARGE_SINCE) . ")";
+}
+
+// SQL boolean expression: TRUE unless the row is a zero-amount transaction dated
+// on/after ZERO_AMOUNT_EXCLUDE_SINCE. Service messages (see serviceMessageSql())
+// are kept so they can be priced.
+function zeroAmountExcludeSql(): string {
+    static $sql = null;
+    if ($sql !== null) return $sql;
+    $sql = "NOT (
+        (amount IS NOT NULL AND amount = 0)
+        AND " . txOnOrAfterSql(ZERO_AMOUNT_EXCLUDE_SINCE) . "
+        AND NOT " . serviceMessageSql() . "
+    )";
+    return $sql;
+}
+
+// Total RM billed for a subaccount's $count service messages in one month.
+function serviceMessageCharge(int $count): float {
+    return max(0, $count - SERVICE_MSG_FREE_QUOTA) * SERVICE_MSG_RATE;
+}
+
+// Prices service-message rows in date order per subaccount per month: the first
+// SERVICE_MSG_FREE_QUOTA each month are RM0, the rest SERVICE_MSG_RATE. Rows need
+// 'location_id' and 'tx_date'; each gets a 'cost' key.
+function priceServiceMessages(array $rows): array {
+    $byLoc = [];
+    foreach ($rows as $row) {
+        $txDate = parseTxDate($row['tx_date'] ?? '');
+        $month  = $txDate ? $txDate->format('Y-m') : '';
+        $byLoc[trim($row['location_id']) . '|' . $month][] = $row;
+    }
+    $priced = [];
+    foreach ($byLoc as $locRows) {
+        usort($locRows, function ($a, $b) {
+            $ta = parseTxDate($a['tx_date'] ?? '');
+            $tb = parseTxDate($b['tx_date'] ?? '');
+            return ($ta ? $ta->getTimestamp() : 0) <=> ($tb ? $tb->getTimestamp() : 0);
+        });
+        foreach ($locRows as $i => $row) {
+            $row['cost'] = $i < SERVICE_MSG_FREE_QUOTA ? 0.0 : SERVICE_MSG_RATE;
+            $priced[]    = $row;
+        }
+    }
+    return $priced;
+}
+
 function getDb(): PDO {
     static $db = null;
     if ($db instanceof PDO) return $db;
@@ -52,21 +141,32 @@ function getCreditLimits() {
     return $limits;
 }
 
-// Overview: aggregate totals only — no individual rows loaded into memory
+// Overview: aggregate totals only — no individual rows loaded into memory.
+// The zero-amount/cutoff-date exclusion is done in the WHERE clause (see
+// zeroAmountExcludeSql()) so the DB still does the grouping/summing, not PHP.
 function getTransactionData() {
-    $results = [];
+    $results      = [];
+    $serviceCount = [];
     $stmt = getDb()->query(
         'SELECT location_id, MAX(location_name) AS location_name,
-                type, COUNT(*) AS cnt, SUM(ABS(IFNULL(amount,0))) AS sum_amount
+                type, ' . serviceMessageSql() . ' AS is_service,
+                IF(' . serviceMessageSql() . ', ' . txMonthSql() . ', NULL) AS svc_month,
+                COUNT(*) AS cnt, SUM(ABS(IFNULL(amount,0))) AS sum_amount
          FROM transactions
-         GROUP BY location_id, type'
+         WHERE ' . zeroAmountExcludeSql() . '
+         GROUP BY location_id, type, is_service, svc_month'
     );
     while ($row = $stmt->fetch()) {
         if (empty($row['location_id']) || empty($row['type'])) continue;
         $locId = trim($row['location_id']);
         $type  = trim($row['type']);
 
-        if (stripos($type, 'WhatsApp') !== false) {
+        if (!empty($row['is_service'])) {
+            // Priced after the loop once the subaccount's total is known
+            $month = $row['svc_month'];
+            $serviceCount[$locId][$month] = ($serviceCount[$locId][$month] ?? 0) + intval($row['cnt']);
+            $cat = 'whatsapp'; $cost = 0.0;
+        } elseif (stripos($type, 'WhatsApp') !== false) {
             $cat = 'whatsapp'; $cost = intval($row['cnt']) * 0.50;
         } elseif (stripos($type, 'Emails') !== false) {
             $cat = 'email'; $cost = intval($row['cnt']) * 0.005;
@@ -98,6 +198,9 @@ function getTransactionData() {
             $results[$locId]['callCount']      += intval($row['cnt']);
         }
     }
+    foreach ($serviceCount as $locId => $months) {
+        foreach ($months as $count) $results[$locId]['whatsappAmount'] += serviceMessageCharge($count);
+    }
     return $results;
 }
 
@@ -105,14 +208,29 @@ function getTransactionData() {
 function getLocationMonthlyData(string $locId): array {
     $monthlyData = [];
     $stmt = getDb()->prepare(
-        'SELECT type, description, tx_date, amount FROM transactions WHERE location_id = ?'
+        'SELECT location_id, type, description, tx_date, amount,
+                ' . serviceMessageSql() . ' AS is_service
+         FROM transactions
+         WHERE location_id = ? AND ' . zeroAmountExcludeSql()
     );
     $stmt->execute([$locId]);
+    $rows        = [];
+    $serviceRows = [];
     while ($row = $stmt->fetch()) {
+        if (!empty($row['is_service'])) $serviceRows[] = $row;
+        else                             $rows[]        = $row;
+    }
+    // Service messages are priced in date order (first 1000 each month free), then shown with the rest
+    foreach (priceServiceMessages($serviceRows) as $row) $rows[] = $row;
+
+    foreach ($rows as $row) {
+        $txDate = parseTxDate($row['tx_date'] ?? '');
         $type = trim($row['type']);
         $desc = strtolower(trim($row['description'] ?? ''));
 
-        if (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
+        if (isset($row['cost'])) {
+            $cat = 'whatsapp'; $cost = $row['cost'];
+        } elseif (stripos($type, 'WhatsApp') !== false || stripos($desc, 'whatsapp') !== false) {
             $cat = 'whatsapp'; $cost = 0.50;
         } elseif (stripos($type, 'Emails') !== false || stripos($desc, 'emails') !== false) {
             $cat = 'email'; $cost = 0.005;
@@ -122,23 +240,19 @@ function getLocationMonthlyData(string $locId): array {
             continue;
         }
 
-        if (!empty($row['tx_date'])) {
-            $ds   = preg_replace('/(st|nd|rd|th)/', '', $row['tx_date']);
-            $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($ds));
-            if ($date) {
-                $mk = $date->format('Y-m');
-                if (!isset($monthlyData[$mk]))
-                    $monthlyData[$mk] = ['types' => []];
-                if (!isset($monthlyData[$mk]['types'][$cat]))
-                    $monthlyData[$mk]['types'][$cat] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
-                $monthlyData[$mk]['types'][$cat]['totalAmount'] += $cost;
-                $monthlyData[$mk]['types'][$cat]['count']++;
-                $monthlyData[$mk]['types'][$cat]['transactions'][] = [
-                    'date'         => $row['tx_date'],
-                    'amount'       => $cost,
-                    'originalType' => $type,
-                ];
-            }
+        if ($txDate) {
+            $mk = $txDate->format('Y-m');
+            if (!isset($monthlyData[$mk]))
+                $monthlyData[$mk] = ['types' => []];
+            if (!isset($monthlyData[$mk]['types'][$cat]))
+                $monthlyData[$mk]['types'][$cat] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
+            $monthlyData[$mk]['types'][$cat]['totalAmount'] += $cost;
+            $monthlyData[$mk]['types'][$cat]['count']++;
+            $monthlyData[$mk]['types'][$cat]['transactions'][] = [
+                'date'         => $row['tx_date'],
+                'amount'       => $cost,
+                'originalType' => $type,
+            ];
         }
     }
     return $monthlyData;

@@ -6,6 +6,17 @@
  * Top-up history read from credit_topups table.
  */
 
+// Zero-amount transactions are only excluded from billing/display starting this date.
+// Transactions before this date still charge the flat rate regardless of amount.
+const ZERO_AMOUNT_EXCLUDE_SINCE = '2026-08-01';
+
+// From this date, zero-amount WhatsApp (service) messages are billed again: the first
+// SERVICE_MSG_FREE_QUOTA per subaccount each calendar month are free, every one after
+// that in the same month is charged SERVICE_MSG_RATE.
+const SERVICE_MSG_CHARGE_SINCE = '2026-10-01';
+const SERVICE_MSG_FREE_QUOTA   = 1000;
+const SERVICE_MSG_RATE         = 0.10;
+
 $targetLocationId = isset($_GET['locationId']) ? trim($_GET['locationId']) : '';
 
 if ($targetLocationId === '') {
@@ -36,6 +47,83 @@ function getDb(): PDO {
     return $db;
 }
 
+function parseTxDate(?string $raw): ?DateTime {
+    if (empty($raw)) return null;
+    $dateStr = preg_replace('/(st|nd|rd|th)/', '', $raw);
+    $date = DateTime::createFromFormat('M j Y, h:i:s A', trim($dateStr));
+    return $date ?: null;
+}
+
+// SQL boolean: tx_date is in or after the month of $since. tx_date is stored as a
+// formatted string like "Aug 1st 2026, 10:23:45 AM", so we compare year/month only
+// (cutoffs are always the 1st of a month) using plain string functions — keeps the
+// filter usable directly in SQL on a large/growing table.
+function txOnOrAfterSql(string $since): string {
+    $cutoff = new DateTime($since);
+    $year   = (int)$cutoff->format('Y');
+    $month  = (int)$cutoff->format('n');
+    $txYear = "CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(tx_date, ',', 1), ' ', -1) AS UNSIGNED)";
+    return "($txYear > $year OR ($txYear = $year
+        AND FIELD(LEFT(tx_date, 3), 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec') >= $month))";
+}
+
+// SQL expression: tx_date's month as "YYYY-MM" (same string format as txOnOrAfterSql()).
+function txMonthSql(): string {
+    return "CONCAT(SUBSTRING_INDEX(SUBSTRING_INDEX(tx_date, ',', 1), ' ', -1), '-',
+        LPAD(FIELD(LEFT(tx_date, 3), 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'), 2, '0'))";
+}
+
+// SQL boolean: zero-amount WhatsApp service message dated on/after SERVICE_MSG_CHARGE_SINCE.
+function serviceMessageSql(): string {
+    return "((amount IS NOT NULL AND amount = 0)
+        AND (IFNULL(type, '') LIKE '%WhatsApp%' OR IFNULL(description, '') LIKE '%whatsapp%')
+        AND " . txOnOrAfterSql(SERVICE_MSG_CHARGE_SINCE) . ")";
+}
+
+// SQL boolean expression: TRUE unless the row is a zero-amount transaction dated
+// on/after ZERO_AMOUNT_EXCLUDE_SINCE. Service messages (see serviceMessageSql())
+// are kept so they can be priced.
+function zeroAmountExcludeSql(): string {
+    static $sql = null;
+    if ($sql !== null) return $sql;
+    $sql = "NOT (
+        (amount IS NOT NULL AND amount = 0)
+        AND " . txOnOrAfterSql(ZERO_AMOUNT_EXCLUDE_SINCE) . "
+        AND NOT " . serviceMessageSql() . "
+    )";
+    return $sql;
+}
+
+// Total RM billed for a subaccount's $count service messages in one month.
+function serviceMessageCharge(int $count): float {
+    return max(0, $count - SERVICE_MSG_FREE_QUOTA) * SERVICE_MSG_RATE;
+}
+
+// Prices service-message rows in date order per subaccount per month: the first
+// SERVICE_MSG_FREE_QUOTA each month are RM0, the rest SERVICE_MSG_RATE. Rows need
+// 'location_id' and 'tx_date'; each gets a 'cost' key.
+function priceServiceMessages(array $rows): array {
+    $byLoc = [];
+    foreach ($rows as $row) {
+        $txDate = parseTxDate($row['tx_date'] ?? '');
+        $month  = $txDate ? $txDate->format('Y-m') : '';
+        $byLoc[trim($row['location_id']) . '|' . $month][] = $row;
+    }
+    $priced = [];
+    foreach ($byLoc as $locRows) {
+        usort($locRows, function ($a, $b) {
+            $ta = parseTxDate($a['tx_date'] ?? '');
+            $tb = parseTxDate($b['tx_date'] ?? '');
+            return ($ta ? $ta->getTimestamp() : 0) <=> ($tb ? $tb->getTimestamp() : 0);
+        });
+        foreach ($locRows as $i => $row) {
+            $row['cost'] = $i < SERVICE_MSG_FREE_QUOTA ? 0.0 : SERVICE_MSG_RATE;
+            $priced[]    = $row;
+        }
+    }
+    return $priced;
+}
+
 function getCreditLimits($targetLocationId = null) {
     $creditLimits = [];
     $sql = 'SELECT location_id, wa_credits, email_credits FROM credit_limits';
@@ -60,23 +148,31 @@ function getCreditLimits($targetLocationId = null) {
 
 function getTransactionData($targetLocationId = null) {
     $results = [];
-    $sql = 'SELECT location_id, location_name, type, description, tx_date
-            FROM transactions';
+    $sql = 'SELECT location_id, location_name, type, description, tx_date, amount,
+                   ' . serviceMessageSql() . ' AS is_service
+            FROM transactions
+            WHERE ' . zeroAmountExcludeSql();
     $params = [];
     if ($targetLocationId !== null) {
-        $sql .= ' WHERE location_id = ?';
+        $sql .= ' AND location_id = ?';
         $params[] = $targetLocationId;
     }
 
     $stmt = getDb()->prepare($sql);
     $stmt->execute($params);
+
+    $serviceRows = [];
     while ($row = $stmt->fetch()) {
         if (empty($row['location_id']) || empty($row['type'])) continue;
-        $locationId = trim($row['location_id']);
+
         $type        = trim($row['type']);
         $description = strtolower(trim($row['description'] ?? ''));
 
-        if (stripos($type, 'WhatsApp') !== false || stripos($description, 'whatsapp') !== false) {
+        if (!empty($row['is_service'])) {
+            // Priced after the loop, in date order (first 1000 each month free)
+            $serviceRows[] = $row;
+            continue;
+        } elseif (stripos($type, 'WhatsApp') !== false || stripos($description, 'whatsapp') !== false) {
             $category = 'whatsapp'; $creditAmount = 0.50;
         } elseif (stripos($type, 'Emails') !== false || stripos($description, 'emails') !== false) {
             $category = 'email'; $creditAmount = 0.005;
@@ -84,39 +180,45 @@ function getTransactionData($targetLocationId = null) {
             continue;
         }
 
-        $locationName = !empty($row['location_name']) ? trim($row['location_name']) : $locationId;
-
-        if (!isset($results[$locationId])) {
-            $results[$locationId] = ['locationName' => $locationName, 'emailAmount' => 0, 'whatsappAmount' => 0,
-                'emailCount' => 0, 'whatsappCount' => 0, 'monthlyData' => []];
-        }
-
-        if ($category === 'email')    { $results[$locationId]['emailAmount']    += $creditAmount; $results[$locationId]['emailCount']++; }
-        if ($category === 'whatsapp') { $results[$locationId]['whatsappAmount'] += $creditAmount; $results[$locationId]['whatsappCount']++; }
-
-        if (!empty($row['tx_date'])) {
-            $dateStr = preg_replace('/(st|nd|rd|th)/', '', $row['tx_date']);
-            $date    = DateTime::createFromFormat('M j Y, h:i:s A', trim($dateStr));
-            if ($date) {
-                $monthKey = $date->format('Y-m');
-                if (!isset($results[$locationId]['monthlyData'][$monthKey])) {
-                    $results[$locationId]['monthlyData'][$monthKey] = ['types' => []];
-                }
-                if (!isset($results[$locationId]['monthlyData'][$monthKey]['types'][$category])) {
-                    $results[$locationId]['monthlyData'][$monthKey]['types'][$category] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
-                }
-                $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['totalAmount'] += $creditAmount;
-                $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['count']++;
-                $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['transactions'][] = [
-                    'date'         => $row['tx_date'],
-                    'amount'       => $creditAmount,
-                    'originalType' => $type,
-                    'description'  => $row['description'] ?? '',
-                ];
-            }
-        }
+        addTransaction($results, $row, $category, $creditAmount);
+    }
+    foreach (priceServiceMessages($serviceRows) as $row) {
+        addTransaction($results, $row, 'whatsapp', $row['cost']);
     }
     return $results;
+}
+
+function addTransaction(array &$results, array $row, string $category, float $creditAmount): void {
+    $locationId   = trim($row['location_id']);
+    $type         = trim($row['type']);
+    $locationName = !empty($row['location_name']) ? trim($row['location_name']) : $locationId;
+
+    if (!isset($results[$locationId])) {
+        $results[$locationId] = ['locationName' => $locationName, 'emailAmount' => 0, 'whatsappAmount' => 0,
+            'emailCount' => 0, 'whatsappCount' => 0, 'monthlyData' => []];
+    }
+
+    if ($category === 'email')    { $results[$locationId]['emailAmount']    += $creditAmount; $results[$locationId]['emailCount']++; }
+    if ($category === 'whatsapp') { $results[$locationId]['whatsappAmount'] += $creditAmount; $results[$locationId]['whatsappCount']++; }
+
+    $txDate = parseTxDate($row['tx_date'] ?? '');
+    if ($txDate) {
+        $monthKey = $txDate->format('Y-m');
+        if (!isset($results[$locationId]['monthlyData'][$monthKey])) {
+            $results[$locationId]['monthlyData'][$monthKey] = ['types' => []];
+        }
+        if (!isset($results[$locationId]['monthlyData'][$monthKey]['types'][$category])) {
+            $results[$locationId]['monthlyData'][$monthKey]['types'][$category] = ['totalAmount' => 0, 'count' => 0, 'transactions' => []];
+        }
+        $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['totalAmount'] += $creditAmount;
+        $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['count']++;
+        $results[$locationId]['monthlyData'][$monthKey]['types'][$category]['transactions'][] = [
+            'date'         => $row['tx_date'],
+            'amount'       => $creditAmount,
+            'originalType' => $type,
+            'description'  => $row['description'] ?? '',
+        ];
+    }
 }
 
 function getTopupHistory($targetLocationId) {
