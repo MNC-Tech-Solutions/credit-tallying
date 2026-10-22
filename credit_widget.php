@@ -10,12 +10,18 @@
 // Transactions before this date still charge the flat rate regardless of amount.
 const ZERO_AMOUNT_EXCLUDE_SINCE = '2026-08-01';
 
-// From this date, zero-amount WhatsApp (service) messages are billed again: the first
-// SERVICE_MSG_FREE_QUOTA per subaccount each calendar month are free, every one after
-// that in the same month is charged SERVICE_MSG_RATE.
-const SERVICE_MSG_CHARGE_SINCE = '2026-10-01';
-const SERVICE_MSG_FREE_QUOTA   = 1000;
-const SERVICE_MSG_RATE         = 0.10;
+// From this date WhatsApp is priced per type instead of a flat RM0.50. Only the types
+// below are billed; every other WhatsApp type (inbound, conversation, free entry point,
+// usage, calls) is excluded. Service messages: the first SERVICE_MSG_FREE_QUOTA per
+// subaccount each calendar month are free, the rest are charged the service rate.
+const WHATSAPP_TYPE_RATES_SINCE = '2026-10-01';
+const WHATSAPP_TYPE_RATES = [   // keys are lowercase type names
+    'whatsapp marketing messages' => 0.50,
+    'whatsapp utility messages'   => 0.10,
+    'whatsapp service messages'   => 0.10,
+];
+const SERVICE_MSG_TYPE       = 'whatsapp service messages';
+const SERVICE_MSG_FREE_QUOTA = 1000;
 
 $targetLocationId = isset($_GET['locationId']) ? trim($_GET['locationId']) : '';
 
@@ -73,34 +79,54 @@ function txMonthSql(): string {
         LPAD(FIELD(LEFT(tx_date, 3), 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'), 2, '0'))";
 }
 
-// SQL boolean: zero-amount WhatsApp service message dated on/after SERVICE_MSG_CHARGE_SINCE.
-function serviceMessageSql(): string {
-    return "((amount IS NOT NULL AND amount = 0)
-        AND (IFNULL(type, '') LIKE '%WhatsApp%' OR IFNULL(description, '') LIKE '%whatsapp%')
-        AND " . txOnOrAfterSql(SERVICE_MSG_CHARGE_SINCE) . ")";
+// SQL boolean: row is dated on/after WHATSAPP_TYPE_RATES_SINCE (per-type WhatsApp pricing).
+function whatsappTypeRatesSql(): string {
+    return txOnOrAfterSql(WHATSAPP_TYPE_RATES_SINCE);
 }
 
-// SQL boolean expression: TRUE unless the row is a zero-amount transaction dated
-// on/after ZERO_AMOUNT_EXCLUDE_SINCE. Service messages (see serviceMessageSql())
-// are kept so they can be priced.
+// SQL boolean: row's type is one of the billed WHATSAPP_TYPE_RATES types.
+function whatsappBilledTypeSql(): string {
+    return "LOWER(IFNULL(type, '')) IN ('" . implode("','", array_keys(WHATSAPP_TYPE_RATES)) . "')";
+}
+
+// SQL boolean: WhatsApp service message under per-type pricing.
+function serviceMessageSql(): string {
+    return "(LOWER(IFNULL(type, '')) = '" . SERVICE_MSG_TYPE . "' AND " . whatsappTypeRatesSql() . ")";
+}
+
+// SQL boolean expression: TRUE unless the row is excluded from billing:
+//  - a zero-amount transaction dated on/after ZERO_AMOUNT_EXCLUDE_SINCE (billed
+//    WhatsApp types under per-type pricing are kept), or
+//  - a WhatsApp row of a non-billed type dated on/after WHATSAPP_TYPE_RATES_SINCE.
 function zeroAmountExcludeSql(): string {
     static $sql = null;
     if ($sql !== null) return $sql;
+    $isWhatsApp = "(IFNULL(type, '') LIKE '%WhatsApp%' OR IFNULL(description, '') LIKE '%whatsapp%')";
     $sql = "NOT (
-        (amount IS NOT NULL AND amount = 0)
-        AND " . txOnOrAfterSql(ZERO_AMOUNT_EXCLUDE_SINCE) . "
-        AND NOT " . serviceMessageSql() . "
+        (
+            (amount IS NOT NULL AND amount = 0)
+            AND " . txOnOrAfterSql(ZERO_AMOUNT_EXCLUDE_SINCE) . "
+            AND NOT (" . whatsappTypeRatesSql() . " AND " . whatsappBilledTypeSql() . ")
+        )
+        OR (" . whatsappTypeRatesSql() . " AND $isWhatsApp AND NOT " . whatsappBilledTypeSql() . ")
     )";
     return $sql;
 }
 
+// RM per WhatsApp row (service messages are priced separately). $perType is true for
+// rows dated on/after WHATSAPP_TYPE_RATES_SINCE; returns null for a non-billed type.
+function whatsappRate(string $type, bool $perType): ?float {
+    if (!$perType) return 0.50;
+    return WHATSAPP_TYPE_RATES[strtolower(trim($type))] ?? null;
+}
+
 // Total RM billed for a subaccount's $count service messages in one month.
 function serviceMessageCharge(int $count): float {
-    return max(0, $count - SERVICE_MSG_FREE_QUOTA) * SERVICE_MSG_RATE;
+    return max(0, $count - SERVICE_MSG_FREE_QUOTA) * WHATSAPP_TYPE_RATES[SERVICE_MSG_TYPE];
 }
 
 // Prices service-message rows in date order per subaccount per month: the first
-// SERVICE_MSG_FREE_QUOTA each month are RM0, the rest SERVICE_MSG_RATE. Rows need
+// SERVICE_MSG_FREE_QUOTA each month are RM0, the rest the service rate. Rows need
 // 'location_id' and 'tx_date'; each gets a 'cost' key.
 function priceServiceMessages(array $rows): array {
     $byLoc = [];
@@ -117,7 +143,7 @@ function priceServiceMessages(array $rows): array {
             return ($ta ? $ta->getTimestamp() : 0) <=> ($tb ? $tb->getTimestamp() : 0);
         });
         foreach ($locRows as $i => $row) {
-            $row['cost'] = $i < SERVICE_MSG_FREE_QUOTA ? 0.0 : SERVICE_MSG_RATE;
+            $row['cost'] = $i < SERVICE_MSG_FREE_QUOTA ? 0.0 : WHATSAPP_TYPE_RATES[SERVICE_MSG_TYPE];
             $priced[]    = $row;
         }
     }
@@ -149,7 +175,7 @@ function getCreditLimits($targetLocationId = null) {
 function getTransactionData($targetLocationId = null) {
     $results = [];
     $sql = 'SELECT location_id, location_name, type, description, tx_date, amount,
-                   ' . serviceMessageSql() . ' AS is_service
+                   ' . serviceMessageSql() . ' AS is_service, ' . whatsappTypeRatesSql() . ' AS per_type
             FROM transactions
             WHERE ' . zeroAmountExcludeSql();
     $params = [];
@@ -173,7 +199,8 @@ function getTransactionData($targetLocationId = null) {
             $serviceRows[] = $row;
             continue;
         } elseif (stripos($type, 'WhatsApp') !== false || stripos($description, 'whatsapp') !== false) {
-            $category = 'whatsapp'; $creditAmount = 0.50;
+            $category = 'whatsapp'; $creditAmount = whatsappRate($type, !empty($row['per_type']));
+            if ($creditAmount === null) continue;
         } elseif (stripos($type, 'Emails') !== false || stripos($description, 'emails') !== false) {
             $category = 'email'; $creditAmount = 0.005;
         } else {
